@@ -168,11 +168,56 @@ export async function generateSiteWithClaude(
   return { ideas: siteIdeas, html };
 }
 
-/** Commita o mockup gerado no repositório do GitHub (branch dedicado a mockups). */
+/**
+ * Monta o CLAUDE.md com o contexto do negócio, salvo junto do mockup — se o
+ * cliente aceitar a proposta, quem continuar o desenvolvimento (inclusive
+ * via Claude Code) já parte com o contexto do negócio, sem precisar
+ * reconstruir do zero a partir do anúncio original.
+ */
+function buildProjectClaudeMd(lead: Lead): string {
+  const lines = [
+    `# ${lead.businessName} — site institucional`,
+    "",
+    "Mockup gerado automaticamente pela ASTI Tech a partir de um anúncio classificado, como proposta comercial pro cliente. `index.html` é um HTML autocontido de página única, com CSS inline — sem backend, sem formulário funcional, com placeholders de contato. Antes de evoluir o projeto, confirme com o cliente o que ele aceitou e quais próximos passos ele quer (múltiplas páginas? formulário de contato de verdade? CMS? domínio próprio?).",
+    "",
+    "## Sobre o negócio",
+    `- Segmento: ${lead.segment ?? "não informado"}`,
+    `- Anúncio de origem: ${lead.sourceUrl}`,
+    `- Contato informado: ${lead.contactEmail ?? "—"} / ${lead.contactPhone ?? "—"}`,
+    `- Custo mensal estimado (proposta ASTI Tech): R$ ${lead.estimatedMonthlyCost?.toFixed(2) ?? "—"}`,
+  ];
+
+  if (lead.businessDescription) {
+    lines.push("", "## Detalhes extraídos do anúncio", lead.businessDescription);
+  }
+
+  lines.push(
+    "",
+    "## Identidade visual usada no mockup",
+    lead.brandColors?.length
+      ? `- Cores de marca reais (extraídas das fotos do anúncio): ${lead.brandColors.join(", ")}`
+      : "- Nenhuma cor de marca real identificada no anúncio — paleta escolhida por segmento.",
+    lead.logoUrl
+      ? `- Logo real identificada: ${lead.logoUrl}`
+      : "- Nenhuma logo real identificada no anúncio."
+  );
+
+  if (lead.siteIdeas?.length) {
+    lines.push("", "## Ideias de conteúdo sugeridas", ...lead.siteIdeas.map((idea) => `- ${idea}`));
+  }
+
+  return lines.join("\n") + "\n";
+}
+
+/** Commita o mockup gerado no repositório do GitHub (branch dedicado a mockups), junto com um CLAUDE.md de contexto. */
 export async function publishToGithub(lead: Lead & { slug: string; siteHtml: string }): Promise<{
   repoUrl: string;
 }> {
-  const { repoUrl } = await publishMockup({ slug: lead.slug, htmlContent: lead.siteHtml });
+  const { repoUrl } = await publishMockup({
+    slug: lead.slug,
+    htmlContent: lead.siteHtml,
+    claudeMd: buildProjectClaudeMd(lead),
+  });
   return { repoUrl };
 }
 

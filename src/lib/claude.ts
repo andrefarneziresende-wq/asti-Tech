@@ -45,7 +45,7 @@ export async function generateSiteContent(
   const visualStyle = pickVisualStyle(lead.id + lead.businessName);
 
   const brandInstructions = lead.brandColors?.length
-    ? `\nCores de marca reais desse negócio (extraídas das fotos do próprio anúncio) — use EXATAMENTE essas cores como paleta principal do site, não invente outra paleta: ${lead.brandColors.join(", ")}. Você pode complementar com neutros (branco/preto/cinza) para legibilidade, mas a cor de destaque do site deve vir dessa lista.`
+    ? `\nCores de marca reais desse negócio (extraídas das fotos do próprio anúncio) — use essas cores como base da paleta principal do site, não invente outra paleta: ${lead.brandColors.join(", ")}. IMPORTANTE sobre contraste/legibilidade: se alguma dessas cores for muito clara, muito saturada ou muito vibrante para servir de fundo de texto (ex: um amarelo ou verde-limão puro), NÃO a use como cor de fundo de blocos de texto — use-a com moderação em detalhes/destaques/botões/bordas, e mantenha o fundo das seções de texto em tons neutros (branco, cinza claro, ou uma versão bem escurecida/clareada da cor de marca) com o texto sempre em alto contraste sobre ele. O objetivo é o site parecer com a cor de marca, sem nenhum trecho de texto difícil de ler.`
     : "";
 
   const logoInstructions = lead.logoUrl
@@ -75,7 +75,7 @@ Estilo visual a seguir: ${visualStyle}${brandInstructions}${logoInstructions}${d
 
 O resultado tem que parecer um site profissional feito em 2026, não um template datado. Isso significa: tipografia contemporânea (use uma pilha de fontes moderna via font-family, ex: system-ui, "Segoe UI", Inter, Helvetica Neue, sans-serif — nunca deixe cair no Times New Roman/Arial puro), bastante espaço em branco e hierarquia visual clara entre título/subtítulo/corpo, cabeçalho fixo/sticky com navegação simples, botões de call-to-action com estados de hover/transição sutis, cantos arredondados e sombras leves onde fizer sentido pro estilo escolhido, e nenhum elemento com cara de site antigo (sem bordas duras 3D, sem gradiente arco-íris, sem fonte cursiva genérica de "logo grátis").
 
-O HTML deve ter: cabeçalho com o nome (e logo, se houver) do negócio, uma seção principal (hero) convincente e específica pro negócio, 3-4 seções relevantes (ex: serviços, sobre, diferenciais/depoimentos, contato) e rodapé. Se não houver cores de marca reais informadas acima, escolha uma paleta condizente com o segmento. Não invente dados de contato reais — use placeholders claros como "[telefone]" e "[e-mail]".`,
+O HTML deve ter: cabeçalho com o nome (e logo, se houver) do negócio, uma seção principal (hero) convincente e específica pro negócio, 3-4 seções relevantes (ex: serviços, sobre, diferenciais/depoimentos, contato) e rodapé. Se não houver cores de marca reais informadas acima, escolha uma paleta condizente com o segmento, sempre com contraste confortável entre texto e fundo (siga o padrão de acessibilidade WCAG AA como referência mínima). Não invente dados de contato reais — use placeholders claros como "[telefone]" e "[e-mail]".`,
       },
     ],
   });
