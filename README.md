@@ -38,22 +38,25 @@ Abra [http://localhost:3000](http://localhost:3000) para o site público e
 - `src/app/admin` — painel administrativo protegido por senha (`src/proxy.ts`).
 - `src/lib/pipeline.ts` — etapas do robô de prospecção (scan → geração do site → GitHub →
   publicação do mockup → e-mail ao cliente).
+- `src/lib/claude.ts` — gera o HTML do mockup + ideias de conteúdo via API da Claude.
+- `src/lib/github.ts` — cria um repositório privado no GitHub e commita o mockup gerado.
+- `src/app/(site)/[slug]/route.ts` — serve o HTML do mockup direto do banco em `seusite.com/slug`.
 - `prisma/schema.prisma` — modelos `Lead`, `LeadTimelineEntry` e `ContactMessage` no Postgres.
 - `src/lib/leads-store.ts` / `src/lib/contact-store.ts` — acesso ao banco via Prisma.
 
 ## Status da automação (robô de prospecção)
 
-O painel `/admin` já implementa o fluxo completo de ponta a ponta e já persiste tudo no Postgres,
-mas ainda roda em modo **simulado** nos pontos abaixo — para virar produção, é preciso configurar
-as integrações reais:
+O painel `/admin` implementa o fluxo completo de ponta a ponta, rodando como job assíncrono
+(`after()` do Next.js — a requisição responde na hora e o pipeline continua em segundo plano,
+com a página fazendo polling do status). Persistência via Postgres.
 
-| Etapa | Hoje | Para produção |
+| Etapa | Status | Requer |
 |---|---|---|
-| Escanear anúncio/classificado | Gera um lead simulado a partir do domínio da URL | Buscar o HTML da página e usar a API da Claude para extrair dados reais (nome, contato, segmento) |
-| Gerar o site com IA | Retorna ideias de conteúdo pré-definidas | Chamar a API da Claude (Messages API) para gerar o código-fonte completo do site |
-| Publicar no GitHub | Retorna uma URL de repositório simulada | Usar a API do GitHub (`GITHUB_TOKEN` + `GITHUB_ORG`) para criar o repositório e commitar o código |
-| Publicar o mockup | Retorna uma URL simulada | Disparar um deploy real (ex.: API da Vercel) do repositório gerado |
-| Enviar e-mail ao cliente | Só envia se houver `contactEmail` e `RESEND_API_KEY` configurados | Já funcional — só falta as duas condições acima |
+| Escanear anúncio/classificado | **Simulado** — gera um lead a partir do domínio da URL | Fase 2: buscar o HTML da página e usar a Claude para extrair dados reais |
+| Gerar o site com IA | **Real** — a Claude gera o HTML completo do mockup + 5 ideias de conteúdo | `ANTHROPIC_API_KEY` |
+| Publicar no GitHub | **Real** — cria um repositório privado e commita o `index.html` gerado | `GITHUB_TOKEN` (e opcionalmente `GITHUB_ORG`) |
+| Publicar o mockup | **Real** — o mockup fica disponível em `SITE_URL/<slug>`, servido direto do banco | `SITE_URL` |
+| Enviar e-mail ao cliente | **Real**, mas só dispara se o lead tiver `contactEmail` | `RESEND_API_KEY` |
 
 O formulário de contato do site público (`/api/contact`) já usa o mesmo mecanismo de e-mail:
 funciona de verdade assim que `RESEND_API_KEY` estiver configurada; sem ela, a mensagem fica

@@ -44,6 +44,8 @@ export interface Lead {
   status: LeadStatus;
   estimatedMonthlyCost?: number;
   siteIdeas?: string[];
+  slug?: string;
+  siteHtml?: string;
   mockupUrl?: string;
   githubRepoUrl?: string;
   timeline: TimelineEntry[];

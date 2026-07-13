@@ -4,6 +4,8 @@ import { STATUS_LABELS } from "@/lib/leads";
 import { RunJobButton } from "./RunJobButton";
 import { LeadEditForm } from "./LeadEditForm";
 
+export const dynamic = "force-dynamic";
+
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const lead = await getLead(id);
@@ -53,11 +55,27 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               </div>
               <div>
                 <dt className="text-xs text-muted">Mockup publicado</dt>
-                <dd className="break-all text-foreground">{lead.mockupUrl ?? "—"}</dd>
+                <dd className="break-all text-foreground">
+                  {lead.mockupUrl ? (
+                    <a href={lead.mockupUrl} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                      {lead.mockupUrl}
+                    </a>
+                  ) : (
+                    "—"
+                  )}
+                </dd>
               </div>
               <div>
                 <dt className="text-xs text-muted">Repositório no GitHub</dt>
-                <dd className="break-all text-foreground">{lead.githubRepoUrl ?? "—"}</dd>
+                <dd className="break-all text-foreground">
+                  {lead.githubRepoUrl ? (
+                    <a href={lead.githubRepoUrl} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                      {lead.githubRepoUrl}
+                    </a>
+                  ) : (
+                    "—"
+                  )}
+                </dd>
               </div>
               <div>
                 <dt className="text-xs text-muted">Ideias sugeridas para o site</dt>

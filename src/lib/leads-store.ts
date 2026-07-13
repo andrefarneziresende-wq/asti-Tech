@@ -13,6 +13,8 @@ function toLead(record: PrismaLead & { timeline: PrismaTimelineEntry[] }): Lead 
     status: record.status as LeadStatus,
     estimatedMonthlyCost: record.estimatedMonthlyCost ?? undefined,
     siteIdeas: record.siteIdeas,
+    slug: record.slug ?? undefined,
+    siteHtml: record.siteHtml ?? undefined,
     mockupUrl: record.mockupUrl ?? undefined,
     githubRepoUrl: record.githubRepoUrl ?? undefined,
     timeline: record.timeline
@@ -41,6 +43,11 @@ export async function getLead(id: string): Promise<Lead | undefined> {
   return record ? toLead(record) : undefined;
 }
 
+export async function getLeadBySlug(slug: string): Promise<Lead | undefined> {
+  const record = await prisma.lead.findUnique({ where: { slug }, include: { timeline: true } });
+  return record ? toLead(record) : undefined;
+}
+
 export async function createLead(
   input: Pick<Lead, "sourceUrl" | "businessName"> & Partial<Lead>
 ): Promise<Lead> {
@@ -54,6 +61,8 @@ export async function createLead(
       status: input.status ?? "novo",
       estimatedMonthlyCost: input.estimatedMonthlyCost,
       siteIdeas: input.siteIdeas ?? [],
+      slug: input.slug,
+      siteHtml: input.siteHtml,
       mockupUrl: input.mockupUrl,
       githubRepoUrl: input.githubRepoUrl,
       timeline: {
@@ -85,6 +94,8 @@ export async function updateLead(
         ? { estimatedMonthlyCost: patch.estimatedMonthlyCost }
         : {}),
       ...(patch.siteIdeas !== undefined ? { siteIdeas: patch.siteIdeas } : {}),
+      ...(patch.slug !== undefined ? { slug: patch.slug } : {}),
+      ...(patch.siteHtml !== undefined ? { siteHtml: patch.siteHtml } : {}),
       ...(patch.mockupUrl !== undefined ? { mockupUrl: patch.mockupUrl } : {}),
       ...(patch.githubRepoUrl !== undefined ? { githubRepoUrl: patch.githubRepoUrl } : {}),
       ...(timelineEntry

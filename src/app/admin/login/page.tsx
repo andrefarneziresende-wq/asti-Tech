@@ -7,6 +7,7 @@ import { Logo } from "@/components/site/Logo";
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -19,13 +20,14 @@ function LoginForm() {
     const res = await fetch("/api/admin/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ email, password }),
     });
 
     setLoading(false);
 
     if (!res.ok) {
-      setError("Senha inválida.");
+      const body = await res.json().catch(() => null);
+      setError(body?.error ?? "E-mail ou senha inválidos.");
       return;
     }
 
@@ -41,12 +43,24 @@ function LoginForm() {
         <p className="mt-1 text-center text-sm text-muted">Acesso restrito à equipe ASTI Tech</p>
 
         <div className="mt-6">
+          <label htmlFor="email" className="text-xs font-medium text-muted">E-mail</label>
+          <input
+            id="email"
+            type="email"
+            required
+            autoFocus
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
+          />
+        </div>
+
+        <div className="mt-4">
           <label htmlFor="password" className="text-xs font-medium text-muted">Senha</label>
           <input
             id="password"
             type="password"
             required
-            autoFocus
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="mt-1 w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"

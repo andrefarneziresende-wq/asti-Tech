@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ADMIN_SESSION_COOKIE, getExpectedSessionToken } from "@/lib/admin-auth";
+import { updateSupabaseSession } from "@/lib/supabase/middleware";
 
 export const config = {
   matcher: ["/admin/:path*", "/api/admin/:path*"],
@@ -9,15 +9,13 @@ const PUBLIC_PATHS = new Set(["/admin/login", "/api/admin/login", "/api/admin/lo
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const { response, user } = await updateSupabaseSession(request);
 
   if (PUBLIC_PATHS.has(pathname)) {
-    return NextResponse.next();
+    return response;
   }
 
-  const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
-  const expected = await getExpectedSessionToken();
-
-  if (!token || token !== expected) {
+  if (!user) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
     }
@@ -26,5 +24,5 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  return response;
 }

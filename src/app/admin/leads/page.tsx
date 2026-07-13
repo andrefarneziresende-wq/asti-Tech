@@ -2,6 +2,8 @@ import Link from "next/link";
 import { listLeads } from "@/lib/leads-store";
 import { STATUS_LABELS } from "@/lib/leads";
 
+export const dynamic = "force-dynamic";
+
 export default async function LeadsPage() {
   const leads = await listLeads();
 

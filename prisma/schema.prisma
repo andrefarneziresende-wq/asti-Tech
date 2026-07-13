@@ -29,6 +29,8 @@ model Lead {
   status               LeadStatus @default(novo)
   estimatedMonthlyCost Float?
   siteIdeas            String[]   @default([])
+  slug                 String?    @unique
+  siteHtml             String?
   mockupUrl            String?
   githubRepoUrl        String?
   createdAt            DateTime   @default(now())

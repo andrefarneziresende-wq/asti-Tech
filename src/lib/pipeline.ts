@@ -1,12 +1,14 @@
 import type { Lead } from "./leads";
 import { sendEmail } from "./mailer";
 import { escapeHtml } from "./html";
+import { generateSiteContent } from "./claude";
+import { createSiteRepo } from "./github";
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function slugify(input: string): string {
+export function slugify(input: string): string {
   return (
     input
       .toLowerCase()
@@ -60,38 +62,24 @@ export function estimateMonthlyCost(lead: Pick<Lead, "segment">): number {
   return base + extra;
 }
 
-export function suggestSiteIdeas(lead: Pick<Lead, "businessName">): string[] {
-  return [
-    `Página inicial com identidade visual própria para ${lead.businessName}`,
-    "Botão de contato direto via WhatsApp em destaque",
-    "Seção de depoimentos e avaliações de clientes",
-    "Formulário de contato integrado por e-mail",
-    "Otimização para aparecer no Google (SEO local)",
-  ];
+/** Gera o mockup (HTML) e as ideias de conteúdo do site via API da Claude. */
+export async function generateSiteWithClaude(
+  lead: Lead
+): Promise<{ ideas: string[]; html: string }> {
+  const { siteIdeas, html } = await generateSiteContent(lead);
+  return { ideas: siteIdeas, html };
 }
 
-/**
- * Fase 2 (pendente): chamar a API da Claude (Messages API, requer ANTHROPIC_API_KEY)
- * para gerar o código-fonte completo do site a partir do nome/segmento do negócio.
- */
-export async function generateSiteWithClaude(lead: Lead): Promise<{ ideas: string[] }> {
-  await delay(400);
-  return { ideas: suggestSiteIdeas(lead) };
-}
-
-/**
- * Fase 2 (pendente): usar a API do GitHub (Octokit, requer GITHUB_TOKEN e GITHUB_ORG)
- * para criar um repositório privado e commitar o código gerado.
- */
-export async function publishToGithub(lead: Lead): Promise<string> {
-  await delay(400);
-  return `https://github.com/astitech-clientes/${slugify(lead.businessName)} (simulação — configurar GITHUB_TOKEN)`;
-}
-
-/** Fase 2 (pendente): disparar deploy real (ex: API da Vercel) do repositório gerado. */
-export async function deployMockup(lead: Lead): Promise<string> {
-  await delay(400);
-  return `https://${slugify(lead.businessName)}.mockups.astitech.com.br (simulação)`;
+/** Cria um repositório privado no GitHub e commita o mockup gerado. */
+export async function publishToGithub(lead: Lead & { slug: string; siteHtml: string }): Promise<{
+  repoUrl: string;
+}> {
+  const { repoUrl } = await createSiteRepo({
+    slug: lead.slug,
+    description: `Mockup do site de ${lead.businessName}, gerado pela ASTI Tech.`,
+    htmlContent: lead.siteHtml,
+  });
+  return { repoUrl };
 }
 
 function buildClientEmailHtml(lead: Lead): string {
@@ -111,8 +99,8 @@ function buildClientEmailHtml(lead: Lead): string {
 }
 
 /**
- * Fase 2 (pendente): exige e-mail real do lead e RESEND_API_KEY configurada para
- * o envio acontecer de fato — sem isso, retorna sent: false com o motivo.
+ * Exige e-mail real do lead e RESEND_API_KEY configurada para o envio
+ * acontecer de fato — sem isso, retorna sent: false com o motivo.
  */
 export async function sendClientEmail(lead: Lead): Promise<{ sent: boolean; reason?: string }> {
   if (!lead.contactEmail) {
