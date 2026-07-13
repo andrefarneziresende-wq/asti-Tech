@@ -4,9 +4,11 @@ import { getAppSettings } from "@/lib/settings";
 import { publishToGithub } from "@/lib/pipeline";
 import { withTimeout } from "@/lib/timeout";
 
-// Etapa 2/3 do robô: criar o repositório no GitHub e commitar o mockup.
-export const maxDuration = 90;
-const STEP_TIMEOUT_MS = 70000;
+// Etapa 2/3 do robô: commitar o mockup e o CLAUDE.md no GitHub (até duas
+// chamadas de leitura + duas de escrita na API do GitHub). Plano Pro permite
+// bem mais margem que os 60s do Hobby.
+export const maxDuration = 180;
+const STEP_TIMEOUT_MS = 150000;
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -31,7 +33,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     const { repoUrl } = await withTimeout(
       publishToGithub({ ...lead, slug: lead.slug, siteHtml: lead.siteHtml }),
       STEP_TIMEOUT_MS,
-      "Tempo esgotado publicando no GitHub (mais de 70s). Tente rodar essa etapa de novo."
+      "Tempo esgotado publicando no GitHub (mais de 150s). Tente rodar essa etapa de novo."
     );
 
     const updated = await updateLead(

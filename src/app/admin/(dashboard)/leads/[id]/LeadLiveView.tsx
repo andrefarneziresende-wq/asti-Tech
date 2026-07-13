@@ -18,7 +18,7 @@ const STEP_LABELS: Record<Step, string> = {
 // nem depois disso, algo travou de verdade (rede ou plataforma).
 const CLIENT_STEP_TIMEOUT_MS: Record<Step, number> = {
   "generate-site": 160000,
-  "publish-github": 80000,
+  "publish-github": 160000,
   "send-email": 40000,
 };
 
