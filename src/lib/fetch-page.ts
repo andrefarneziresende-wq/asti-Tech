@@ -1,3 +1,5 @@
+import { withBrowser, renderPageHtml } from "./browser";
+
 const BLOCKED_HOSTNAMES = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1"]);
 const PRIVATE_IP_RE = /^(10\.|127\.|169\.254\.|172\.(1[6-9]|2\d|3[0-1])\.|192\.168\.)/;
 
@@ -22,7 +24,7 @@ export function assertPublicHttpUrl(input: string): URL {
   return url;
 }
 
-function htmlToText(html: string): string {
+export function htmlToText(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
@@ -37,23 +39,17 @@ function htmlToText(html: string): string {
     .trim();
 }
 
-/** Busca o HTML bruto da página. */
+/**
+ * Busca o HTML da página já renderizado num navegador real — necessário
+ * porque a maioria dos sites de classificados (OLX e similares) monta o
+ * conteúdo via JavaScript, e um fetch comum só veria a casca vazia da página.
+ */
 export async function fetchPageHtml(sourceUrl: string): Promise<string> {
   const url = assertPublicHttpUrl(sourceUrl);
-
-  const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0 (compatible; ASTITechBot/1.0)" },
-    signal: AbortSignal.timeout(15000),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Não foi possível acessar a página (status ${res.status}).`);
-  }
-
-  return res.text();
+  return withBrowser((browser) => renderPageHtml(browser, url.toString()));
 }
 
-/** Busca a página e devolve o texto visível (sem tags), truncado para um tamanho razoável. */
+/** Busca a página (renderizada) e devolve o texto visível (sem tags), truncado para um tamanho razoável. */
 export async function fetchPageText(sourceUrl: string, maxChars = 15000): Promise<string> {
   const html = await fetchPageHtml(sourceUrl);
   return htmlToText(html).slice(0, maxChars);

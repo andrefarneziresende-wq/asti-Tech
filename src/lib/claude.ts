@@ -93,10 +93,10 @@ export async function extractBusinessInfo(
 ): Promise<ExtractedBusinessInfo> {
   const stream = client.messages.stream({
     model: "claude-opus-4-8",
-    max_tokens: 2000,
+    max_tokens: 1500,
     thinking: { type: "adaptive" },
     output_config: {
-      effort: "medium",
+      effort: "low",
       format: { type: "json_schema", schema: EXTRACT_SCHEMA },
     },
     messages: [
@@ -149,10 +149,10 @@ export async function selectListingLinks(
 ): Promise<string[]> {
   const stream = client.messages.stream({
     model: "claude-opus-4-8",
-    max_tokens: 2000,
+    max_tokens: 1500,
     thinking: { type: "adaptive" },
     output_config: {
-      effort: "medium",
+      effort: "low",
       format: { type: "json_schema", schema: LISTING_LINKS_SCHEMA },
     },
     messages: [

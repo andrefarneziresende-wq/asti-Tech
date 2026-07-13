@@ -12,7 +12,6 @@ export default function NewLeadPage() {
   const [listingUrl, setListingUrl] = useState("");
   const [listingLoading, setListingLoading] = useState(false);
   const [listingError, setListingError] = useState("");
-  const [listingMessage, setListingMessage] = useState("");
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -45,7 +44,6 @@ export default function NewLeadPage() {
     event.preventDefault();
     setListingLoading(true);
     setListingError("");
-    setListingMessage("");
 
     const res = await fetch("/api/admin/leads/scan-listing", {
       method: "POST",
@@ -54,17 +52,14 @@ export default function NewLeadPage() {
     });
 
     const body = await res.json().catch(() => null);
-    setListingLoading(false);
 
     if (!res.ok) {
+      setListingLoading(false);
       setListingError(body?.error ?? "Não foi possível escanear essa lista.");
       return;
     }
 
-    setListingMessage(
-      `Varredura iniciada! Até ${body.maxLeads} anúncios serão analisados — isso pode levar um minuto ou dois. Atualize a lista de leads daqui a pouco para ver os novos.`
-    );
-    setListingUrl("");
+    router.push(`/admin/jobs/${body.jobId}`);
   }
 
   return (
@@ -111,7 +106,7 @@ export default function NewLeadPage() {
         <h2 className="text-lg font-bold text-foreground">Escanear lista de anúncios</h2>
         <p className="mt-1 text-sm text-muted">
           Cole a URL de uma página de listagem/categoria (com vários anúncios). A Claude identifica
-          os anúncios individuais e cria um lead para cada um — até 10 por vez.
+          os anúncios individuais e cria um lead para cada um — até 5 por vez.
         </p>
 
         <form onSubmit={handleListingSubmit} className="glow-card mt-6 space-y-4 rounded-2xl p-6">
@@ -129,14 +124,13 @@ export default function NewLeadPage() {
           </div>
 
           {listingError && <p className="text-sm text-red-400">{listingError}</p>}
-          {listingMessage && <p className="text-sm text-emerald-400">{listingMessage}</p>}
 
           <button
             type="submit"
             disabled={listingLoading}
             className="w-full rounded-full border border-border px-7 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-primary disabled:opacity-60"
           >
-            {listingLoading ? "Iniciando..." : "Escanear lista (até 10 leads)"}
+            {listingLoading ? "Iniciando..." : "Escanear lista (até 5 leads)"}
           </button>
         </form>
       </div>

@@ -1,29 +1,58 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { createLead, listLeads } from "@/lib/leads-store";
+import { createJob, updateJob } from "@/lib/jobs-store";
 import { scanListingUrl, estimateMonthlyCost, MAX_LISTING_LEADS } from "@/lib/pipeline";
 import { assertPublicHttpUrl } from "@/lib/fetch-page";
 
 export const maxDuration = 60;
 
-async function runListingScan(listingUrl: string) {
+async function runListingScan(jobId: string, listingUrl: string) {
+  await updateJob(jobId, { status: "processando" });
+
   const existing = await listLeads();
   const existingUrls = new Set(existing.map((lead) => lead.sourceUrl));
+  let leadsCreated = 0;
 
   try {
-    await scanListingUrl(listingUrl, async (item) => {
-      if (existingUrls.has(item.sourceUrl)) return;
-      await createLead({
-        sourceUrl: item.sourceUrl,
-        businessName: item.businessName,
-        segment: item.segment,
-        contactEmail: item.contactEmail,
-        contactPhone: item.contactPhone,
-        estimatedMonthlyCost: estimateMonthlyCost(item),
-      });
-      existingUrls.add(item.sourceUrl);
+    const result = await scanListingUrl(listingUrl, {
+      onProgress: async (message) => {
+        await updateJob(jobId, {}, message);
+      },
+      onCandidatesFound: async (count) => {
+        await updateJob(jobId, { candidatesFound: count });
+      },
+      onLinksSelected: async (count) => {
+        await updateJob(jobId, { totalToProcess: count });
+      },
+      onLeadFound: async (item) => {
+        if (existingUrls.has(item.sourceUrl)) {
+          await updateJob(jobId, {}, `Já existe um lead para ${item.sourceUrl}, pulando.`);
+          return;
+        }
+        await createLead({
+          sourceUrl: item.sourceUrl,
+          businessName: item.businessName,
+          segment: item.segment,
+          contactEmail: item.contactEmail,
+          contactPhone: item.contactPhone,
+          estimatedMonthlyCost: estimateMonthlyCost(item),
+        });
+        existingUrls.add(item.sourceUrl);
+        leadsCreated += 1;
+        await updateJob(jobId, { leadsCreated });
+      },
     });
+
+    await updateJob(
+      jobId,
+      { status: "concluido" },
+      `Varredura concluída: ${result.leadsCreated} lead(s) criado(s) de ${result.candidatesFound} link(s) encontrados.${
+        result.errors.length ? ` ${result.errors.length} falha(s).` : ""
+      }`
+    );
   } catch (err) {
-    console.error("Falha na varredura de listagem:", err);
+    const message = err instanceof Error ? err.message : String(err);
+    await updateJob(jobId, { status: "erro", errorMessage: message }, `Erro: ${message}`);
   }
 }
 
@@ -44,10 +73,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  after(() => runListingScan(listingUrl));
+  const job = await createJob({
+    type: "listing",
+    sourceUrl: listingUrl,
+    message: "Job criado, aguardando início.",
+  });
 
-  return NextResponse.json(
-    { started: true, maxLeads: MAX_LISTING_LEADS },
-    { status: 202 }
-  );
+  after(() => runListingScan(job.id, listingUrl));
+
+  return NextResponse.json({ jobId: job.id, maxLeads: MAX_LISTING_LEADS }, { status: 202 });
 }

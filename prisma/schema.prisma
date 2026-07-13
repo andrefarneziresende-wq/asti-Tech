@@ -75,3 +75,38 @@ model AppSettings {
 
   @@map("app_settings")
 }
+
+enum JobStatus {
+  pendente
+  processando
+  concluido
+  erro
+}
+
+/// Job em segundo plano (ex: varredura de uma lista de anúncios), com log de
+/// progresso para acompanhamento em tempo real pelo painel.
+model ScanJob {
+  id              String    @id @default(uuid())
+  type            String
+  sourceUrl       String
+  status          JobStatus @default(pendente)
+  candidatesFound Int?
+  totalToProcess  Int?
+  leadsCreated    Int       @default(0)
+  errorMessage    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  log             ScanJobLogEntry[]
+
+  @@map("scan_jobs")
+}
+
+model ScanJobLogEntry {
+  id      String   @id @default(uuid())
+  jobId   String
+  job     ScanJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  at      DateTime @default(now())
+  message String
+
+  @@map("scan_job_log_entries")
+}

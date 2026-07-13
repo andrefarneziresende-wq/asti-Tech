@@ -2,7 +2,8 @@ import type { Lead } from "./leads";
 import { sendEmail } from "./mailer";
 import { generateSiteContent, extractBusinessInfo, selectListingLinks } from "./claude";
 import { createSiteRepo } from "./github";
-import { fetchPageText, fetchPageHtml, extractSameOriginLinks } from "./fetch-page";
+import { fetchPageText, assertPublicHttpUrl, htmlToText, extractSameOriginLinks } from "./fetch-page";
+import { withBrowser, renderPageHtml } from "./browser";
 import { getAppSettings } from "./settings";
 import { DEFAULT_EMAIL_SUBJECT, DEFAULT_EMAIL_BODY_HTML, renderEmailTemplate } from "./email-template";
 
@@ -35,54 +36,84 @@ export async function scanClassifiedUrl(
   ];
 }
 
-export const MAX_LISTING_LEADS = 10;
+// Limite conservador: cada anúncio precisa renderizar a página num navegador
+// real + chamar a Claude, e no plano gratuito da Vercel uma função tem no
+// máximo 60s. Em planos pagos (Pro+), dá pra aumentar tanto isso quanto o
+// maxDuration da rota se quiser processar mais anúncios por varredura.
+export const MAX_LISTING_LEADS = 5;
 
 type ScannedLead = Pick<
   Lead,
   "sourceUrl" | "businessName" | "segment" | "contactEmail" | "contactPhone"
 >;
 
+export interface ScanListingCallbacks {
+  onProgress?: (message: string) => Promise<void> | void;
+  onCandidatesFound?: (count: number) => Promise<void> | void;
+  onLinksSelected?: (count: number) => Promise<void> | void;
+  onLeadFound: (lead: ScannedLead) => Promise<void>;
+}
+
 /**
  * Busca uma página de listagem/categoria, identifica (via Claude) até
  * MAX_LISTING_LEADS links que parecem anúncios individuais, e extrai os
- * dados de cada um. `onLeadFound` é chamado a cada anúncio processado com
+ * dados de cada um. Reaproveita um único navegador para todas as páginas
+ * dessa varredura. `onLeadFound` é chamado a cada anúncio processado com
  * sucesso, para o chamador decidir como persistir (ex: criar o lead,
- * pulando duplicatas).
+ * pulando duplicatas); os demais callbacks são opcionais, para acompanhar o
+ * progresso (ex: gravar num log de job).
  */
 export async function scanListingUrl(
   listingUrl: string,
-  onLeadFound: (lead: ScannedLead) => Promise<void>
+  callbacks: ScanListingCallbacks
 ): Promise<{ candidatesFound: number; leadsCreated: number; errors: string[] }> {
-  const html = await fetchPageHtml(listingUrl);
-  const candidateLinks = extractSameOriginLinks(html, listingUrl);
+  const url = assertPublicHttpUrl(listingUrl);
 
-  if (candidateLinks.length === 0) {
-    throw new Error("Nenhum link encontrado nessa página.");
-  }
+  return withBrowser(async (browser) => {
+    await callbacks.onProgress?.("Abrindo a página de listagem...");
+    const listingHtml = await renderPageHtml(browser, url.toString());
+    const candidateLinks = extractSameOriginLinks(listingHtml, listingUrl);
 
-  const selected = await selectListingLinks(candidateLinks, listingUrl, MAX_LISTING_LEADS);
-
-  let leadsCreated = 0;
-  const errors: string[] = [];
-
-  for (const adUrl of selected) {
-    try {
-      const pageText = await fetchPageText(adUrl);
-      const info = await extractBusinessInfo(pageText, adUrl);
-      await onLeadFound({
-        sourceUrl: adUrl,
-        businessName: info.businessName || "Negócio sem nome identificado",
-        segment: info.segment || undefined,
-        contactEmail: info.contactEmail || undefined,
-        contactPhone: info.contactPhone || undefined,
-      });
-      leadsCreated += 1;
-    } catch (err) {
-      errors.push(`${adUrl}: ${err instanceof Error ? err.message : String(err)}`);
+    if (candidateLinks.length === 0) {
+      throw new Error("Nenhum link encontrado nessa página.");
     }
-  }
 
-  return { candidatesFound: candidateLinks.length, leadsCreated, errors };
+    await callbacks.onCandidatesFound?.(candidateLinks.length);
+    await callbacks.onProgress?.(
+      `${candidateLinks.length} links encontrados. Pedindo pra Claude identificar quais são anúncios...`
+    );
+
+    const selected = await selectListingLinks(candidateLinks, listingUrl, MAX_LISTING_LEADS);
+    await callbacks.onLinksSelected?.(selected.length);
+    await callbacks.onProgress?.(`${selected.length} anúncios selecionados para processar.`);
+
+    let leadsCreated = 0;
+    const errors: string[] = [];
+
+    for (const [index, adUrl] of selected.entries()) {
+      await callbacks.onProgress?.(`Processando anúncio ${index + 1}/${selected.length}: ${adUrl}`);
+      try {
+        const adHtml = await renderPageHtml(browser, adUrl);
+        const pageText = htmlToText(adHtml).slice(0, 15000);
+        const info = await extractBusinessInfo(pageText, adUrl);
+        await callbacks.onLeadFound({
+          sourceUrl: adUrl,
+          businessName: info.businessName || "Negócio sem nome identificado",
+          segment: info.segment || undefined,
+          contactEmail: info.contactEmail || undefined,
+          contactPhone: info.contactPhone || undefined,
+        });
+        leadsCreated += 1;
+        await callbacks.onProgress?.(`Lead criado: ${info.businessName || adUrl}`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        errors.push(`${adUrl}: ${message}`);
+        await callbacks.onProgress?.(`Falha em ${adUrl}: ${message}`);
+      }
+    }
+
+    return { candidatesFound: candidateLinks.length, leadsCreated, errors };
+  });
 }
 
 const SEGMENT_MONTHLY_EXTRA: Record<string, number> = {

@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { listLeads, createLead } from "@/lib/leads-store";
 import { scanClassifiedUrl, estimateMonthlyCost } from "@/lib/pipeline";
 
+// Renderizar a página num navegador real (necessário pra sites que carregam
+// o anúncio via JavaScript) pode levar mais que o padrão de uma função.
+export const maxDuration = 60;
+
 export async function GET() {
   const leads = await listLeads();
   return NextResponse.json({ leads });
