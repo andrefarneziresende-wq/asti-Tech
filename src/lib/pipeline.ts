@@ -1,12 +1,10 @@
 import type { Lead } from "./leads";
 import { sendEmail } from "./mailer";
-import { escapeHtml } from "./html";
-import { generateSiteContent } from "./claude";
+import { generateSiteContent, extractBusinessInfo, selectListingLinks } from "./claude";
 import { createSiteRepo } from "./github";
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+import { fetchPageText, fetchPageHtml, extractSameOriginLinks } from "./fetch-page";
+import { getAppSettings } from "./settings";
+import { DEFAULT_EMAIL_SUBJECT, DEFAULT_EMAIL_BODY_HTML, renderEmailTemplate } from "./email-template";
 
 export function slugify(input: string): string {
   return (
@@ -19,32 +17,72 @@ export function slugify(input: string): string {
   );
 }
 
-/**
- * Fase 2 (pendente): buscar o HTML da página informada e usar a API da Claude
- * para extrair nome do negócio, segmento e contato reais. Por enquanto, gera
- * um lead simulado a partir do domínio da URL só para demonstrar o fluxo do painel.
- */
+/** Busca a página do anúncio e usa a Claude para extrair os dados do negócio anunciado. */
 export async function scanClassifiedUrl(
   sourceUrl: string
-): Promise<Array<Pick<Lead, "sourceUrl" | "businessName" | "segment">>> {
-  await delay(300);
+): Promise<Array<Pick<Lead, "sourceUrl" | "businessName" | "segment" | "contactEmail" | "contactPhone">>> {
+  const pageText = await fetchPageText(sourceUrl);
+  const info = await extractBusinessInfo(pageText, sourceUrl);
 
-  let hostname = "negocio-exemplo.com.br";
-  try {
-    hostname = new URL(sourceUrl).hostname.replace(/^www\./, "");
-  } catch {
-    // URL inválida: segue com o valor padrão simulado.
+  return [
+    {
+      sourceUrl,
+      businessName: info.businessName || "Negócio sem nome identificado",
+      segment: info.segment || undefined,
+      contactEmail: info.contactEmail || undefined,
+      contactPhone: info.contactPhone || undefined,
+    },
+  ];
+}
+
+export const MAX_LISTING_LEADS = 10;
+
+type ScannedLead = Pick<
+  Lead,
+  "sourceUrl" | "businessName" | "segment" | "contactEmail" | "contactPhone"
+>;
+
+/**
+ * Busca uma página de listagem/categoria, identifica (via Claude) até
+ * MAX_LISTING_LEADS links que parecem anúncios individuais, e extrai os
+ * dados de cada um. `onLeadFound` é chamado a cada anúncio processado com
+ * sucesso, para o chamador decidir como persistir (ex: criar o lead,
+ * pulando duplicatas).
+ */
+export async function scanListingUrl(
+  listingUrl: string,
+  onLeadFound: (lead: ScannedLead) => Promise<void>
+): Promise<{ candidatesFound: number; leadsCreated: number; errors: string[] }> {
+  const html = await fetchPageHtml(listingUrl);
+  const candidateLinks = extractSameOriginLinks(html, listingUrl);
+
+  if (candidateLinks.length === 0) {
+    throw new Error("Nenhum link encontrado nessa página.");
   }
 
-  const businessName =
-    hostname
-      .split(".")[0]
-      .split(/[-_]/)
-      .filter(Boolean)
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" ") || "Negócio Encontrado";
+  const selected = await selectListingLinks(candidateLinks, listingUrl, MAX_LISTING_LEADS);
 
-  return [{ sourceUrl, businessName, segment: "Serviços locais" }];
+  let leadsCreated = 0;
+  const errors: string[] = [];
+
+  for (const adUrl of selected) {
+    try {
+      const pageText = await fetchPageText(adUrl);
+      const info = await extractBusinessInfo(pageText, adUrl);
+      await onLeadFound({
+        sourceUrl: adUrl,
+        businessName: info.businessName || "Negócio sem nome identificado",
+        segment: info.segment || undefined,
+        contactEmail: info.contactEmail || undefined,
+        contactPhone: info.contactPhone || undefined,
+      });
+      leadsCreated += 1;
+    } catch (err) {
+      errors.push(`${adUrl}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return { candidatesFound: candidateLinks.length, leadsCreated, errors };
 }
 
 const SEGMENT_MONTHLY_EXTRA: Record<string, number> = {
@@ -82,34 +120,44 @@ export async function publishToGithub(lead: Lead & { slug: string; siteHtml: str
   return { repoUrl };
 }
 
-function buildClientEmailHtml(lead: Lead): string {
-  const ideas = (lead.siteIdeas ?? []).map((idea) => `<li>${escapeHtml(idea)}</li>`).join("");
-  return `
-    <div style="font-family: sans-serif; color: #111;">
-      <p>Olá, ${escapeHtml(lead.businessName)}!</p>
-      <p>Preparamos um mockup gratuito do site do seu negócio, feito com Inteligência Artificial:</p>
-      <p><a href="${lead.mockupUrl ?? "#"}">${escapeHtml(lead.mockupUrl ?? "")}</a></p>
-      <p>Algumas ideias para o seu site:</p>
-      <ul>${ideas}</ul>
-      <p>Custo mensal estimado (hospedagem + manutenção): <strong>R$ ${(lead.estimatedMonthlyCost ?? 0).toFixed(2)}</strong></p>
-      <p>Gostou do que viu? É só responder este e-mail dizendo que tem interesse que damos continuidade ao projeto com você.</p>
-      <p>— Equipe ASTI Tech</p>
-    </div>
-  `;
-}
-
 /**
- * Exige e-mail real do lead e RESEND_API_KEY configurada para o envio
- * acontecer de fato — sem isso, retorna sent: false com o motivo.
+ * Manda o e-mail ao cliente usando o template configurável em /admin/email.
+ * Se o modo de teste estiver ativado, o e-mail vai para o endereço de teste
+ * em vez do e-mail real do lead. Exige RESEND_API_KEY configurada para o
+ * envio acontecer de fato — sem isso, retorna sent: false com o motivo.
  */
 export async function sendClientEmail(lead: Lead): Promise<{ sent: boolean; reason?: string }> {
-  if (!lead.contactEmail) {
+  const settings = await getAppSettings();
+  const recipient = settings.testEmailAddress || lead.contactEmail;
+
+  if (!recipient) {
     return { sent: false, reason: "Lead sem e-mail de contato cadastrado." };
   }
 
-  return sendEmail({
-    to: lead.contactEmail,
-    subject: `${lead.businessName}, preparamos um site para o seu negócio`,
-    html: buildClientEmailHtml(lead),
-  });
+  const { subject, html } = renderEmailTemplate(
+    {
+      subject: settings.emailSubject ?? DEFAULT_EMAIL_SUBJECT,
+      bodyHtml: settings.emailBodyHtml ?? DEFAULT_EMAIL_BODY_HTML,
+    },
+    {
+      businessName: lead.businessName,
+      segment: lead.segment,
+      mockupUrl: lead.mockupUrl,
+      estimatedMonthlyCost: lead.estimatedMonthlyCost,
+      siteIdeas: lead.siteIdeas,
+    }
+  );
+
+  const result = await sendEmail({ to: recipient, subject, html });
+
+  if (settings.testEmailAddress) {
+    return {
+      sent: result.sent,
+      reason: result.sent
+        ? `Modo de teste: enviado para ${settings.testEmailAddress} em vez do e-mail do lead.`
+        : result.reason,
+    };
+  }
+
+  return result;
 }

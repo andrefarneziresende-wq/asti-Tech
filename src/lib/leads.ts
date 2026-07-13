@@ -3,6 +3,7 @@ export type LeadStatus =
   | "coletando_dados"
   | "gerando_site"
   | "publicando"
+  | "pronto_para_email"
   | "email_enviado"
   | "respondeu_interessado"
   | "sem_interesse"
@@ -13,6 +14,7 @@ export const STATUS_LABELS: Record<LeadStatus, string> = {
   coletando_dados: "Coletando dados",
   gerando_site: "Gerando site com IA",
   publicando: "Publicando mockup",
+  pronto_para_email: "Pronto para enviar",
   email_enviado: "E-mail enviado",
   respondeu_interessado: "Cliente interessado",
   sem_interesse: "Sem interesse",
@@ -24,6 +26,7 @@ export const STATUS_ORDER: LeadStatus[] = [
   "coletando_dados",
   "gerando_site",
   "publicando",
+  "pronto_para_email",
   "email_enviado",
   "respondeu_interessado",
 ];

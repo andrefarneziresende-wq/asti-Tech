@@ -13,6 +13,7 @@ enum LeadStatus {
   coletando_dados
   gerando_site
   publicando
+  pronto_para_email
   email_enviado
   respondeu_interessado
   sem_interesse
@@ -61,4 +62,16 @@ model ContactMessage {
   createdAt DateTime @default(now())
 
   @@map("contact_messages")
+}
+
+/// Linha única (id fixo = 1) com configurações globais do painel admin.
+model AppSettings {
+  id               Int      @id @default(1)
+  testEmailAddress String?
+  emailSubject     String?
+  emailBodyHtml    String?
+  autoSendEmail    Boolean  @default(true)
+  updatedAt        DateTime @updatedAt
+
+  @@map("app_settings")
 }

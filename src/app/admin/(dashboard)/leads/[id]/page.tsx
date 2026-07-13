@@ -3,6 +3,7 @@ import { getLead } from "@/lib/leads-store";
 import { STATUS_LABELS } from "@/lib/leads";
 import { RunJobButton } from "./RunJobButton";
 import { LeadEditForm } from "./LeadEditForm";
+import { SendEmailButton } from "./SendEmailButton";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,11 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             {STATUS_LABELS[lead.status]}
           </span>
         </div>
-        <RunJobButton leadId={lead.id} hasEmail={Boolean(lead.contactEmail)} />
+        {lead.status === "pronto_para_email" ? (
+          <SendEmailButton leadId={lead.id} />
+        ) : (
+          <RunJobButton leadId={lead.id} hasEmail={Boolean(lead.contactEmail)} />
+        )}
       </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_320px]">

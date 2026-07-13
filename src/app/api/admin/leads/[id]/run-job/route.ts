@@ -1,5 +1,6 @@
 import { NextResponse, after } from "next/server";
 import { getLead, updateLead } from "@/lib/leads-store";
+import { getAppSettings } from "@/lib/settings";
 import {
   generateSiteWithClaude,
   publishToGithub,
@@ -41,6 +42,17 @@ async function runPipeline(id: string) {
       { githubRepoUrl: repoUrl },
       { label: "Código enviado ao GitHub", detail: repoUrl }
     ))!;
+
+    const settings = await getAppSettings();
+
+    if (!settings.autoSendEmail) {
+      await updateLead(
+        id,
+        { status: "pronto_para_email" },
+        { label: "Pronto para enviar e-mail (envio manual ativado)" }
+      );
+      return;
+    }
 
     const emailResult = await sendClientEmail(lead);
 

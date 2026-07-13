@@ -15,13 +15,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Informe a URL do classificado/anúncio." }, { status: 400 });
   }
 
-  const found = await scanClassifiedUrl(sourceUrl);
+  let found;
+  try {
+    found = await scanClassifiedUrl(sourceUrl);
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Falha ao escanear a URL." },
+      { status: 422 }
+    );
+  }
+
   const created = [];
   for (const item of found) {
     const lead = await createLead({
       sourceUrl: item.sourceUrl,
       businessName: item.businessName,
       segment: item.segment,
+      contactEmail: item.contactEmail,
+      contactPhone: item.contactPhone,
       estimatedMonthlyCost: estimateMonthlyCost(item),
     });
     created.push(lead);
