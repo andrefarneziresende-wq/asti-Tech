@@ -42,6 +42,9 @@ async function runListingScan(jobId: string, listingUrl: string) {
             segment: item.segment,
             contactEmail: item.contactEmail,
             contactPhone: item.contactPhone,
+            businessDescription: item.businessDescription,
+            logoUrl: item.logoUrl,
+            brandColors: item.brandColors,
             estimatedMonthlyCost: estimateMonthlyCost(item),
           });
           existingUrls.add(item.sourceUrl);

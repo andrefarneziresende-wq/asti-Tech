@@ -56,6 +56,11 @@ export interface Lead {
   siteHtml?: string;
   mockupUrl?: string;
   githubRepoUrl?: string;
+  // Detalhes reais extraídos do anúncio de origem, usados pra gerar um site
+  // fiel ao negócio (e não um template genérico do segmento).
+  businessDescription?: string;
+  logoUrl?: string;
+  brandColors?: string[];
   timeline: TimelineEntry[];
   createdAt: string;
   updatedAt: string;

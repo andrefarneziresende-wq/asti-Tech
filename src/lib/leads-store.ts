@@ -17,6 +17,9 @@ function toLead(record: PrismaLead & { timeline: PrismaTimelineEntry[] }): Lead 
     siteHtml: record.siteHtml ?? undefined,
     mockupUrl: record.mockupUrl ?? undefined,
     githubRepoUrl: record.githubRepoUrl ?? undefined,
+    businessDescription: record.businessDescription ?? undefined,
+    logoUrl: record.logoUrl ?? undefined,
+    brandColors: record.brandColors,
     timeline: record.timeline
       .slice()
       .sort((a, b) => a.at.getTime() - b.at.getTime())
@@ -65,6 +68,9 @@ export async function createLead(
       siteHtml: input.siteHtml,
       mockupUrl: input.mockupUrl,
       githubRepoUrl: input.githubRepoUrl,
+      businessDescription: input.businessDescription,
+      logoUrl: input.logoUrl,
+      brandColors: input.brandColors ?? [],
       timeline: {
         create: [{ label: "Lead criado", detail: input.sourceUrl }],
       },
@@ -98,6 +104,11 @@ export async function updateLead(
       ...(patch.siteHtml !== undefined ? { siteHtml: patch.siteHtml } : {}),
       ...(patch.mockupUrl !== undefined ? { mockupUrl: patch.mockupUrl } : {}),
       ...(patch.githubRepoUrl !== undefined ? { githubRepoUrl: patch.githubRepoUrl } : {}),
+      ...(patch.businessDescription !== undefined
+        ? { businessDescription: patch.businessDescription }
+        : {}),
+      ...(patch.logoUrl !== undefined ? { logoUrl: patch.logoUrl } : {}),
+      ...(patch.brandColors !== undefined ? { brandColors: patch.brandColors } : {}),
       ...(timelineEntry
         ? { timeline: { create: [{ label: timelineEntry.label, detail: timelineEntry.detail }] } }
         : {}),

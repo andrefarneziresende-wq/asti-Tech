@@ -1,8 +1,14 @@
 import type { Lead } from "./leads";
 import { sendEmail } from "./mailer";
-import { generateSiteContent, extractBusinessInfo, selectListingLinks } from "./claude";
-import { createSiteRepo } from "./github";
-import { fetchPageText, assertPublicHttpUrl, htmlToText, extractSameOriginLinks } from "./fetch-page";
+import { generateSiteContent, extractBusinessInfo, selectListingLinks, analyzeBrandImages } from "./claude";
+import { publishMockup } from "./github";
+import {
+  fetchPageHtml,
+  assertPublicHttpUrl,
+  htmlToText,
+  extractSameOriginLinks,
+  extractImageUrls,
+} from "./fetch-page";
 import { withBrowser, renderPageHtml } from "./browser";
 import { getAppSettings } from "./settings";
 import { DEFAULT_EMAIL_SUBJECT, DEFAULT_EMAIL_BODY_HTML, renderEmailTemplate } from "./email-template";
@@ -18,22 +24,50 @@ export function slugify(input: string): string {
   );
 }
 
-/** Busca a página do anúncio e usa a Claude para extrair os dados do negócio anunciado. */
-export async function scanClassifiedUrl(
-  sourceUrl: string
-): Promise<Array<Pick<Lead, "sourceUrl" | "businessName" | "segment" | "contactEmail" | "contactPhone">>> {
-  const pageText = await fetchPageText(sourceUrl);
-  const info = await extractBusinessInfo(pageText, sourceUrl);
+type ScannedLead = Pick<
+  Lead,
+  | "sourceUrl"
+  | "businessName"
+  | "segment"
+  | "contactEmail"
+  | "contactPhone"
+  | "businessDescription"
+  | "logoUrl"
+  | "brandColors"
+>;
 
-  return [
-    {
-      sourceUrl,
-      businessName: info.businessName || "Negócio sem nome identificado",
-      segment: info.segment || undefined,
-      contactEmail: info.contactEmail || undefined,
-      contactPhone: info.contactPhone || undefined,
-    },
-  ];
+/**
+ * Extrai os dados do negócio a partir do HTML de uma página de anúncio já
+ * renderizada, e tenta identificar a logo/paleta de cores reais a partir das
+ * fotos do anúncio (via visão da Claude) — usados depois pra gerar um site
+ * fiel à identidade visual do negócio, em vez de um template genérico.
+ */
+async function analyzeAdPage(html: string, sourceUrl: string): Promise<ScannedLead> {
+  const pageText = htmlToText(html).slice(0, 15000);
+  const info = await extractBusinessInfo(pageText, sourceUrl);
+  const businessName = info.businessName || "Negócio sem nome identificado";
+
+  const imageUrls = extractImageUrls(html, sourceUrl);
+  const brand = await analyzeBrandImages(imageUrls, businessName);
+
+  return {
+    sourceUrl,
+    businessName,
+    segment: info.segment || undefined,
+    contactEmail: info.contactEmail || undefined,
+    contactPhone: info.contactPhone || undefined,
+    businessDescription: info.description || undefined,
+    // Só aceita a logo se a Claude devolveu exatamente uma das URLs que
+    // enviamos — evita salvar uma URL inventada/alterada.
+    logoUrl: brand.logoUrl && imageUrls.includes(brand.logoUrl) ? brand.logoUrl : undefined,
+    brandColors: brand.colors.length ? brand.colors : undefined,
+  };
+}
+
+/** Busca a página do anúncio e usa a Claude para extrair os dados do negócio anunciado. */
+export async function scanClassifiedUrl(sourceUrl: string): Promise<ScannedLead[]> {
+  const html = await fetchPageHtml(sourceUrl);
+  return [await analyzeAdPage(html, sourceUrl)];
 }
 
 // Limite conservador: cada anúncio precisa renderizar a página num navegador
@@ -41,11 +75,6 @@ export async function scanClassifiedUrl(
 // máximo 60s. Em planos pagos (Pro+), dá pra aumentar tanto isso quanto o
 // maxDuration da rota se quiser processar mais anúncios por varredura.
 export const MAX_LISTING_LEADS = 5;
-
-type ScannedLead = Pick<
-  Lead,
-  "sourceUrl" | "businessName" | "segment" | "contactEmail" | "contactPhone"
->;
 
 export interface ScanListingCallbacks {
   onProgress?: (message: string) => Promise<void> | void;
@@ -101,17 +130,10 @@ export async function scanListingUrl(
       await callbacks.onProgress?.(`Processando anúncio ${index + 1}/${selected.length}: ${adUrl}`);
       try {
         const adHtml = await renderPageHtml(browser, adUrl);
-        const pageText = htmlToText(adHtml).slice(0, 15000);
-        const info = await extractBusinessInfo(pageText, adUrl);
-        await callbacks.onLeadFound({
-          sourceUrl: adUrl,
-          businessName: info.businessName || "Negócio sem nome identificado",
-          segment: info.segment || undefined,
-          contactEmail: info.contactEmail || undefined,
-          contactPhone: info.contactPhone || undefined,
-        });
+        const scanned = await analyzeAdPage(adHtml, adUrl);
+        await callbacks.onLeadFound(scanned);
         leadsCreated += 1;
-        await callbacks.onProgress?.(`Lead criado: ${info.businessName || adUrl}`);
+        await callbacks.onProgress?.(`Lead criado: ${scanned.businessName}`);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         errors.push(`${adUrl}: ${message}`);
@@ -146,15 +168,11 @@ export async function generateSiteWithClaude(
   return { ideas: siteIdeas, html };
 }
 
-/** Cria um repositório privado no GitHub e commita o mockup gerado. */
+/** Commita o mockup gerado no repositório do GitHub (branch dedicado a mockups). */
 export async function publishToGithub(lead: Lead & { slug: string; siteHtml: string }): Promise<{
   repoUrl: string;
 }> {
-  const { repoUrl } = await createSiteRepo({
-    slug: lead.slug,
-    description: `Mockup do site de ${lead.businessName}, gerado pela ASTI Tech.`,
-    htmlContent: lead.siteHtml,
-  });
+  const { repoUrl } = await publishMockup({ slug: lead.slug, htmlContent: lead.siteHtml });
   return { repoUrl };
 }
 

@@ -49,12 +49,6 @@ export async function fetchPageHtml(sourceUrl: string): Promise<string> {
   return withBrowser((browser) => renderPageHtml(browser, url.toString()));
 }
 
-/** Busca a página (renderizada) e devolve o texto visível (sem tags), truncado para um tamanho razoável. */
-export async function fetchPageText(sourceUrl: string, maxChars = 15000): Promise<string> {
-  const html = await fetchPageHtml(sourceUrl);
-  return htmlToText(html).slice(0, maxChars);
-}
-
 /** Extrai links (mesma origem) de dentro de um HTML, resolvidos para URL absoluta e sem duplicatas. */
 export function extractSameOriginLinks(html: string, baseUrl: string, max = 300): string[] {
   const base = new URL(baseUrl);
@@ -87,4 +81,49 @@ export function extractSameOriginLinks(html: string, baseUrl: string, max = 300)
   }
 
   return links;
+}
+
+const SKIP_IMAGE_RE = /(sprite|pixel|1x1|tracking|placeholder|blank|spacer)/i;
+
+/**
+ * Extrai URLs de imagens (mesma origem ou não) de dentro de um HTML, resolvidas
+ * para URL absoluta, sem duplicatas e sem imagens que claramente não são fotos
+ * reais do anúncio (ícones minúsculos, pixels de rastreamento, data URIs).
+ * Usado pra tentar identificar a logo/paleta de cores real do negócio.
+ */
+export function extractImageUrls(html: string, baseUrl: string, max = 8): string[] {
+  const base = new URL(baseUrl);
+  const imgRe = /<img\s+[^>]*src\s*=\s*["']([^"']+)["'][^>]*>/gi;
+  const seen = new Set<string>();
+  const urls: string[] = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = imgRe.exec(html))) {
+    const raw = match[1];
+    const tag = match[0];
+    if (!raw || raw.startsWith("data:") || SKIP_IMAGE_RE.test(raw)) continue;
+
+    const widthMatch = /width\s*=\s*["']?(\d+)/i.exec(tag);
+    const heightMatch = /height\s*=\s*["']?(\d+)/i.exec(tag);
+    if (widthMatch && Number(widthMatch[1]) < 48) continue;
+    if (heightMatch && Number(heightMatch[1]) < 48) continue;
+
+    let resolved: URL;
+    try {
+      resolved = new URL(raw, base);
+    } catch {
+      continue;
+    }
+
+    if (!["http:", "https:"].includes(resolved.protocol)) continue;
+
+    resolved.hash = "";
+    const normalized = resolved.toString();
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    urls.push(normalized);
+    if (urls.length >= max) break;
+  }
+
+  return urls;
 }

@@ -35,6 +35,9 @@ model Lead {
   siteHtml             String?
   mockupUrl            String?
   githubRepoUrl        String?
+  businessDescription  String?
+  logoUrl              String?
+  brandColors          String[]   @default([])
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
   timeline             LeadTimelineEntry[]

@@ -66,6 +66,51 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               </div>
             </dl>
           </div>
+
+          <div className="glow-card rounded-2xl p-6">
+            <h2 className="text-sm font-semibold text-foreground">Identidade visual detectada no anúncio</h2>
+            <dl className="mt-4 space-y-3 text-sm">
+              <div>
+                <dt className="text-xs text-muted">Logo</dt>
+                <dd className="mt-1">
+                  {lead.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={lead.logoUrl}
+                      alt={`Logo de ${lead.businessName}`}
+                      className="h-12 max-w-full rounded bg-white/5 object-contain p-1"
+                    />
+                  ) : (
+                    <span className="text-foreground">Nenhuma logo identificada nas fotos do anúncio</span>
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted">Cores de marca</dt>
+                <dd className="mt-1">
+                  {lead.brandColors?.length ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {lead.brandColors.map((color) => (
+                        <span key={color} className="flex items-center gap-1.5 text-xs text-foreground">
+                          <span
+                            className="h-4 w-4 rounded-full border border-border"
+                            style={{ backgroundColor: color }}
+                          />
+                          {color}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-foreground">Nenhuma cor de marca identificada nas fotos do anúncio</span>
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted">Detalhes do anúncio usados na geração</dt>
+                <dd className="text-foreground">{lead.businessDescription || "—"}</dd>
+              </div>
+            </dl>
+          </div>
         </div>
 
         <LeadEditForm lead={lead} />

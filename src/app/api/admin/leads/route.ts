@@ -47,6 +47,9 @@ export async function POST(req: NextRequest) {
       segment: item.segment,
       contactEmail: item.contactEmail,
       contactPhone: item.contactPhone,
+      businessDescription: item.businessDescription,
+      logoUrl: item.logoUrl,
+      brandColors: item.brandColors,
       estimatedMonthlyCost: estimateMonthlyCost(item),
     });
     created.push(lead);
