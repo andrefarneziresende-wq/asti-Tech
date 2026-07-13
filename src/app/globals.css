@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+:root {
+  --background: #05070f;
+  --surface: #0b0f1e;
+  --surface-2: #10162b;
+  --foreground: #eef1fb;
+  --muted: #92a0c2;
+  --border: #1e2745;
+  --primary: #3b82f6;
+  --primary-2: #8b5cf6;
+  --accent: #22d3ee;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-2: var(--primary-2);
+  --color-accent: var(--accent);
+  --font-sans: var(--font-body);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body);
+}
+
+.gradient-text {
+  background: linear-gradient(90deg, var(--primary) 0%, var(--primary-2) 55%, var(--accent) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.gradient-border {
+  position: relative;
+  border: 1px solid var(--border);
+}
+
+.glow-card {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.08), rgba(139, 92, 246, 0.03));
+  border: 1px solid var(--border);
+}
+
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(148, 163, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 255, 0.06) 1px, transparent 1px);
+  background-size: 42px 42px;
+}
