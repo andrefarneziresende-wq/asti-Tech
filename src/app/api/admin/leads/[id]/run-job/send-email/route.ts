@@ -39,7 +39,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ lead: updated, done: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await updateLead(id, { status: "erro" }, { label: "Erro ao enviar o e-mail", detail: message });
-    return NextResponse.json({ error: message }, { status: 500 });
+    const failed = await updateLead(id, { status: "erro" }, { label: "Erro ao enviar o e-mail", detail: message });
+    return NextResponse.json({ error: message, lead: failed }, { status: 500 });
   }
 }

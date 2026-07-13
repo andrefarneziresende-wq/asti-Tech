@@ -49,7 +49,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ lead: updated, done: false, nextStep: "publish-github" });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await updateLead(id, { status: "erro" }, { label: "Erro ao gerar o site", detail: message });
-    return NextResponse.json({ error: message }, { status: 500 });
+    const failed = await updateLead(id, { status: "erro" }, { label: "Erro ao gerar o site", detail: message });
+    return NextResponse.json({ error: message, lead: failed }, { status: 500 });
   }
 }

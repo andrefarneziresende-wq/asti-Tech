@@ -22,7 +22,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
   if (!lead.slug || !lead.siteHtml) {
     return NextResponse.json(
-      { error: "O site ainda não foi gerado para esse lead. Rode a etapa de geração primeiro." },
+      { error: "O site ainda não foi gerado para esse lead. Rode a etapa de geração primeiro.", lead },
       { status: 400 }
     );
   }
@@ -54,7 +54,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ lead: updated, done: false, nextStep: "send-email" });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await updateLead(id, { status: "erro" }, { label: "Erro ao publicar no GitHub", detail: message });
-    return NextResponse.json({ error: message }, { status: 500 });
+    const failed = await updateLead(id, { status: "erro" }, { label: "Erro ao publicar no GitHub", detail: message });
+    return NextResponse.json({ error: message, lead: failed }, { status: 500 });
   }
 }
