@@ -19,11 +19,11 @@ const OUTPUT_SCHEMA = {
 } as const;
 
 const VISUAL_STYLES = [
-  "minimalista, muito espaço em branco, tipografia grande e poucos elementos",
-  "vibrante e moderno, com blocos de cor sólida e formas geométricas",
-  "corporativo elegante, com gradientes sutis e bastante hierarquia visual",
-  "artesanal/acolhedor, com bordas arredondadas, texturas suaves e tom pessoal",
-  "editorial, inspirado em revistas, com grid assimétrico e destaque pra fotos/texto",
+  "moderno minimalista: muito espaço em branco, tipografia grande e poucos elementos",
+  "moderno vibrante: blocos de cor sólida, formas geométricas e contrastes fortes",
+  "moderno corporativo: gradientes sutis, bastante hierarquia visual e ares premium",
+  "moderno acolhedor: bordas arredondadas, texturas suaves e tom pessoal/artesanal",
+  "moderno editorial: grid assimétrico inspirado em revistas, destaque pra fotos/texto",
 ];
 
 /** Escolhe um estilo visual de forma determinística a partir de um texto (mesmo negócio = mesmo estilo, negócios diferentes tendem a variar). */
@@ -67,11 +67,13 @@ export async function generateSiteContent(
     messages: [
       {
         role: "user",
-        content: `Você é um designer/desenvolvedor web. Crie um mockup de site institucional de uma única página (HTML autocontido — CSS inline em uma tag <style>, sem dependências externas, responsivo) para o negócio abaixo, além de 5 ideias de conteúdo para esse site. Esse site precisa ser único e específico pra esse negócio — não repita uma estrutura genérica de segmento.
+        content: `Você é um designer/desenvolvedor web de alto nível, especializado em sites institucionais modernos. Crie um mockup de site institucional de uma única página (HTML autocontido — CSS inline em uma tag <style>, sem dependências externas, responsivo, mobile-first) para o negócio abaixo, além de 5 ideias de conteúdo para esse site. Esse site precisa ser único e específico pra esse negócio — não repita uma estrutura genérica de segmento.
 
 Negócio: ${lead.businessName}
 Segmento: ${lead.segment ?? "não informado"}
 Estilo visual a seguir: ${visualStyle}${brandInstructions}${logoInstructions}${descriptionInstructions}
+
+O resultado tem que parecer um site profissional feito em 2026, não um template datado. Isso significa: tipografia contemporânea (use uma pilha de fontes moderna via font-family, ex: system-ui, "Segoe UI", Inter, Helvetica Neue, sans-serif — nunca deixe cair no Times New Roman/Arial puro), bastante espaço em branco e hierarquia visual clara entre título/subtítulo/corpo, cabeçalho fixo/sticky com navegação simples, botões de call-to-action com estados de hover/transição sutis, cantos arredondados e sombras leves onde fizer sentido pro estilo escolhido, e nenhum elemento com cara de site antigo (sem bordas duras 3D, sem gradiente arco-íris, sem fonte cursiva genérica de "logo grátis").
 
 O HTML deve ter: cabeçalho com o nome (e logo, se houver) do negócio, uma seção principal (hero) convincente e específica pro negócio, 3-4 seções relevantes (ex: serviços, sobre, diferenciais/depoimentos, contato) e rodapé. Se não houver cores de marca reais informadas acima, escolha uma paleta condizente com o segmento. Não invente dados de contato reais — use placeholders claros como "[telefone]" e "[e-mail]".`,
       },
