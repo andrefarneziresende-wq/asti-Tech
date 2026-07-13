@@ -161,8 +161,9 @@ export async function publishToGithub(lead: Lead & { slug: string; siteHtml: str
 /**
  * Manda o e-mail ao cliente usando o template configurável em /admin/email.
  * Se o modo de teste estiver ativado, o e-mail vai para o endereço de teste
- * em vez do e-mail real do lead. Exige RESEND_API_KEY configurada para o
- * envio acontecer de fato — sem isso, retorna sent: false com o motivo.
+ * em vez do e-mail real do lead. Exige ZOHO_SMTP_USER/ZOHO_SMTP_PASS
+ * configuradas para o envio acontecer de fato — sem isso, retorna sent:
+ * false com o motivo.
  */
 export async function sendClientEmail(lead: Lead): Promise<{ sent: boolean; reason?: string }> {
   const settings = await getAppSettings();
