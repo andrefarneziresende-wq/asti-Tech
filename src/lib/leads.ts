@@ -26,6 +26,17 @@ export const STATUS_LABELS: Record<LeadStatus, string> = {
 // Status em que o robô está rodando em segundo plano e pode ser cancelado.
 export const RUNNING_LEAD_STATUSES: LeadStatus[] = ["gerando_site", "publicando"];
 
+// Cada etapa tem no máximo ~55s de orçamento interno (ver withTimeout nas
+// rotas de run-job); acima disso com folga, sem nenhuma atualização, é sinal
+// de que a função foi interrompida pela plataforma antes de conseguir
+// registrar um erro — não é mais "só lento".
+export const LEAD_STALE_THRESHOLD_MS = 90_000;
+
+export function isLeadStale(lead: Pick<Lead, "status" | "updatedAt">, now: number = Date.now()): boolean {
+  if (!RUNNING_LEAD_STATUSES.includes(lead.status)) return false;
+  return now - new Date(lead.updatedAt).getTime() > LEAD_STALE_THRESHOLD_MS;
+}
+
 export const STATUS_ORDER: LeadStatus[] = [
   "novo",
   "coletando_dados",

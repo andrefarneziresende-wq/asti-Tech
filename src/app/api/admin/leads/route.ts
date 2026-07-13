@@ -3,14 +3,14 @@ import { listLeads, createLead } from "@/lib/leads-store";
 import { scanClassifiedUrl, estimateMonthlyCost } from "@/lib/pipeline";
 import { withTimeout } from "@/lib/timeout";
 
-// Renderizar a página num navegador real (necessário pra sites que carregam
-// o anúncio via JavaScript) pode levar mais que o padrão de uma função.
-export const maxDuration = 60;
+// Renderizar a página num navegador real + extrair texto/imagens + chamar a
+// Claude (extração e visão) pode levar mais que o padrão de uma função.
+export const maxDuration = 120;
 
 // Deixa uma margem antes do limite da função, pra devolver uma mensagem de
 // erro clara em vez de deixar a Vercel encerrar a conexão sem aviso quando o
 // site de destino está fora do ar ou muito lento.
-const SCAN_TIMEOUT_MS = 45000;
+const SCAN_TIMEOUT_MS = 100000;
 
 export async function GET() {
   const leads = await listLeads();
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     found = await withTimeout(
       scanClassifiedUrl(sourceUrl),
       SCAN_TIMEOUT_MS,
-      "Tempo esgotado ao escanear essa URL (mais de 45s). O site pode estar fora do ar ou muito lento."
+      "Tempo esgotado ao escanear essa URL (mais de 100s). O site pode estar fora do ar ou muito lento."
     );
   } catch (err) {
     return NextResponse.json(

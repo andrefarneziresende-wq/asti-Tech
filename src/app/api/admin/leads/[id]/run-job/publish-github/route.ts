@@ -5,8 +5,8 @@ import { publishToGithub } from "@/lib/pipeline";
 import { withTimeout } from "@/lib/timeout";
 
 // Etapa 2/3 do robô: criar o repositório no GitHub e commitar o mockup.
-export const maxDuration = 60;
-const STEP_TIMEOUT_MS = 55000;
+export const maxDuration = 90;
+const STEP_TIMEOUT_MS = 70000;
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -31,7 +31,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     const { repoUrl } = await withTimeout(
       publishToGithub({ ...lead, slug: lead.slug, siteHtml: lead.siteHtml }),
       STEP_TIMEOUT_MS,
-      "Tempo esgotado publicando no GitHub (mais de 55s). Tente rodar essa etapa de novo."
+      "Tempo esgotado publicando no GitHub (mais de 70s). Tente rodar essa etapa de novo."
     );
 
     const updated = await updateLead(

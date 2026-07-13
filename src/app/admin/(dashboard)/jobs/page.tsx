@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { listJobs } from "@/lib/jobs-store";
-import { JOB_STATUS_LABELS } from "@/lib/jobs";
+import { JOB_STATUS_LABELS, isJobStale } from "@/lib/jobs";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +44,14 @@ export default async function JobsPage() {
                     {job.sourceUrl}
                   </Link>
                 </td>
-                <td className="px-4 py-3 text-muted">{JOB_STATUS_LABELS[job.status]}</td>
+                <td className="px-4 py-3 text-muted">
+                  {JOB_STATUS_LABELS[job.status]}
+                  {isJobStale(job) && (
+                    <span className="ml-2 rounded-full border border-amber-500/40 px-2 py-0.5 text-xs text-amber-400">
+                      travado?
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-muted">
                   {job.leadsCreated}
                   {job.totalToProcess ? ` / ${job.totalToProcess}` : ""}

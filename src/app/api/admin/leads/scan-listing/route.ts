@@ -5,12 +5,15 @@ import { scanListingUrl, estimateMonthlyCost, MAX_LISTING_LEADS } from "@/lib/pi
 import { assertPublicHttpUrl } from "@/lib/fetch-page";
 import { withTimeout } from "@/lib/timeout";
 
-export const maxDuration = 60;
+// Processa até MAX_LISTING_LEADS anúncios em sequência (cada um com sua
+// própria chamada à Claude); no plano Pro da Vercel dá pra usar um limite
+// bem mais alto que os 60s do Hobby.
+export const maxDuration = 280;
 
 // Deixa uma margem antes do limite da função, pra garantir que o erro seja
 // gravado no job antes da plataforma matar a execução sem aviso — importante
 // quando o site de destino está fora do ar ou muito lento.
-const SCAN_TIMEOUT_MS = 50000;
+const SCAN_TIMEOUT_MS = 260000;
 
 async function runListingScan(jobId: string, listingUrl: string) {
   await updateJob(jobId, { status: "processando" });
@@ -57,7 +60,7 @@ async function runListingScan(jobId: string, listingUrl: string) {
         },
       }),
       SCAN_TIMEOUT_MS,
-      "Tempo esgotado durante a varredura (mais de 50s). O site de destino pode estar fora do ar ou muito lento."
+      "Tempo esgotado durante a varredura (mais de 4min). O site de destino pode estar fora do ar ou muito lento."
     );
 
     if (result.cancelled) {

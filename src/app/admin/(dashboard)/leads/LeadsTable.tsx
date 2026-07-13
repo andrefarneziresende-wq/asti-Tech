@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { STATUS_LABELS, type Lead } from "@/lib/leads";
+import { STATUS_LABELS, isLeadStale, type Lead } from "@/lib/leads";
 
 export function LeadsTable({ leads }: { leads: Lead[] }) {
   const router = useRouter();
@@ -98,7 +98,14 @@ export function LeadsTable({ leads }: { leads: Lead[] }) {
                   </Link>
                 </td>
                 <td className="max-w-[220px] truncate px-4 py-3 text-muted">{lead.sourceUrl}</td>
-                <td className="px-4 py-3 text-muted">{STATUS_LABELS[lead.status]}</td>
+                <td className="px-4 py-3 text-muted">
+                  {STATUS_LABELS[lead.status]}
+                  {isLeadStale(lead) && (
+                    <span className="ml-2 rounded-full border border-amber-500/40 px-2 py-0.5 text-xs text-amber-400">
+                      travado?
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-muted">
                   {lead.estimatedMonthlyCost ? `R$ ${lead.estimatedMonthlyCost.toFixed(2)}` : "-"}
                 </td>

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { JOB_STATUS_LABELS, type ScanJob } from "@/lib/jobs";
+import { JOB_STATUS_LABELS, isJobStale, type ScanJob } from "@/lib/jobs";
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -11,12 +11,15 @@ const FINISHED_STATUSES = ["concluido", "erro", "cancelado"];
 export function JobLiveView({ initialJob }: { initialJob: ScanJob }) {
   const [job, setJob] = useState(initialJob);
   const [cancelling, setCancelling] = useState(false);
+  const [now, setNow] = useState(0);
   const pollRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (FINISHED_STATUSES.includes(job.status)) return;
+    const initial = setTimeout(() => setNow(Date.now()), 0);
+    if (FINISHED_STATUSES.includes(job.status)) return () => clearTimeout(initial);
 
     pollRef.current = window.setInterval(async () => {
+      setNow(Date.now());
       const res = await fetch(`/api/admin/jobs/${job.id}`);
       if (!res.ok) return;
       const body = await res.json();
@@ -27,6 +30,7 @@ export function JobLiveView({ initialJob }: { initialJob: ScanJob }) {
     }, POLL_INTERVAL_MS);
 
     return () => {
+      clearTimeout(initial);
       if (pollRef.current) window.clearInterval(pollRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -43,7 +47,15 @@ export function JobLiveView({ initialJob }: { initialJob: ScanJob }) {
     }
   }
 
+  async function handleMarkStale() {
+    const res = await fetch(`/api/admin/jobs/${job.id}/mark-stale`, { method: "POST" });
+    const body = await res.json().catch(() => null);
+    if (res.ok && body?.job) setJob(body.job);
+  }
+
   const running = job.status === "pendente" || job.status === "processando";
+  const stale = now > 0 && isJobStale(job, now);
+  const staleMinutes = now > 0 ? Math.floor((now - new Date(job.updatedAt).getTime()) / 60000) : 0;
   const progressPct =
     job.totalToProcess && job.totalToProcess > 0
       ? Math.min(100, Math.round((job.leadsCreated / job.totalToProcess) * 100))
@@ -57,19 +69,21 @@ export function JobLiveView({ initialJob }: { initialJob: ScanJob }) {
           <p className="mt-1 max-w-xl break-all text-sm text-muted">{job.sourceUrl}</p>
           <span
             className={`mt-2 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${
-              running
-                ? "border-primary/40 text-accent"
-                : job.status === "concluido"
-                  ? "border-emerald-500/40 text-emerald-400"
-                  : job.status === "cancelado"
-                    ? "border-amber-500/40 text-amber-400"
-                    : "border-red-500/40 text-red-400"
+              stale
+                ? "border-amber-500/40 text-amber-400"
+                : running
+                  ? "border-primary/40 text-accent"
+                  : job.status === "concluido"
+                    ? "border-emerald-500/40 text-emerald-400"
+                    : job.status === "cancelado"
+                      ? "border-amber-500/40 text-amber-400"
+                      : "border-red-500/40 text-red-400"
             }`}
           >
-            {running && (
+            {running && !stale && (
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
             )}
-            {JOB_STATUS_LABELS[job.status]}
+            {stale ? `Parece travado (sem atividade há ${staleMinutes} min)` : JOB_STATUS_LABELS[job.status]}
           </span>
         </div>
         <div className="flex items-center gap-3">
@@ -91,6 +105,24 @@ export function JobLiveView({ initialJob }: { initialJob: ScanJob }) {
           </Link>
         </div>
       </div>
+
+      {stale && (
+        <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
+          <p className="font-medium text-amber-300">Essa varredura parece travada</p>
+          <p className="mt-1 text-muted">
+            Sem nenhuma atualização há {staleMinutes} min. A função provavelmente foi interrompida pela plataforma
+            antes de conseguir registrar um erro — não é um problema com a URL de origem. Pode marcar como erro e
+            rodar a varredura de novo com segurança.
+          </p>
+          <button
+            type="button"
+            onClick={handleMarkStale}
+            className="mt-3 rounded-full border border-amber-500/40 px-4 py-1.5 text-xs font-medium text-amber-300 transition-colors hover:bg-amber-500/10"
+          >
+            Marcar como erro
+          </button>
+        </div>
+      )}
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_280px]">
         <div className="glow-card rounded-2xl p-6">
