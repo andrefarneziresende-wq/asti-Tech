@@ -1,8 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
+import { Logo } from "./Logo";
 
 const NAV_LINKS = [
   { href: "#servicos", label: "Serviços" },
@@ -18,7 +18,7 @@ export function Header() {
     <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <Link href="/" className="flex items-center gap-2">
-          <Image src="/logo.png" alt="ASTI Tech" width={140} height={61} priority className="h-9 w-auto" />
+          <Logo className="h-9 w-auto" />
         </Link>
 
         <nav className="hidden items-center gap-8 md:flex">

@@ -1,12 +1,12 @@
-import Image from "next/image";
 import { WHATSAPP_LINK, CONTACT_EMAIL } from "@/lib/contact";
+import { Logo } from "./Logo";
 
 export function Footer() {
   return (
     <footer className="border-t border-border bg-surface">
       <div className="mx-auto grid max-w-6xl gap-10 px-6 py-14 md:grid-cols-3">
         <div>
-          <Image src="/logo.png" alt="ASTI Tech" width={140} height={61} className="h-9 w-auto" />
+          <Logo className="h-9 w-auto" />
           <p className="mt-4 max-w-xs text-sm text-muted">
             Sites profissionais para pequenas e médias empresas, criados com Inteligência Artificial.
           </p>

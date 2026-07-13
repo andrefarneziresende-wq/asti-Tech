@@ -37,9 +37,6 @@ yarn-error.log*
 # vercel
 .vercel
 
-# dados locais (leads, mensagens de contato) — não versionar dados de clientes
-/data/
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts

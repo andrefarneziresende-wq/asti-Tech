@@ -1,5 +1,5 @@
-import Image from "next/image";
 import Link from "next/link";
+import { Logo } from "@/components/site/Logo";
 import { LogoutButton } from "./LogoutButton";
 
 const NAV = [
@@ -13,7 +13,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="flex min-h-screen bg-background">
       <aside className="hidden w-64 flex-col border-r border-border bg-surface p-6 md:flex">
         <Link href="/admin">
-          <Image src="/logo.png" alt="ASTI Tech" width={140} height={61} className="h-8 w-auto" />
+          <Logo className="h-8 w-auto" />
         </Link>
         <span className="mt-1 text-xs text-muted">Painel administrativo</span>
 

@@ -1,15 +1,15 @@
 const STEPS = [
   {
     step: "01",
-    title: "Descoberta",
+    title: "Você conta sobre seu negócio",
     description:
-      "Nossa IA varre anúncios e classificados em busca de negócios que ainda não têm um site — talvez tenha sido assim que você chegou até aqui.",
+      "Fale com a gente pelo formulário, e-mail ou WhatsApp e conte um pouco sobre a sua empresa.",
   },
   {
     step: "02",
     title: "Geração do site com IA",
     description:
-      "A partir dos dados encontrados, a IA já projeta e desenvolve um mockup completo do site do seu negócio.",
+      "A partir dos dados que você passou, a IA projeta e desenvolve um mockup completo do site do seu negócio.",
   },
   {
     step: "03",
@@ -19,15 +19,14 @@ const STEPS = [
   },
   {
     step: "04",
-    title: "E-mail com ideias e valor",
+    title: "Proposta com ideias e valor",
     description:
-      "Você recebe um e-mail com o link do mockup, sugestões de conteúdo para o seu site e uma estimativa do custo mensal.",
+      "Você recebe o link do mockup, sugestões de conteúdo para o seu site e uma estimativa do custo mensal.",
   },
   {
     step: "05",
     title: "Você decide",
-    description:
-      "Gostou? É só responder o e-mail dizendo que tem interesse que a gente dá continuidade ao projeto com você.",
+    description: "Gostou? A gente dá continuidade ao projeto com você a partir daí.",
   },
   {
     step: "06",
@@ -45,7 +44,7 @@ export function HowItWorks() {
           <h2 className="text-3xl font-bold md:text-4xl">Como funciona</h2>
           <p className="mt-4 text-muted">
             Um processo pensado para pequenas e médias empresas: rápido, transparente e sem
-            burocracia. Você também pode nos procurar diretamente e pular direto para o passo 02.
+            burocracia.
           </p>
         </div>
 

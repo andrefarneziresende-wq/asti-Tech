@@ -1,38 +1,68 @@
-import { randomUUID } from "crypto";
-import { readJsonArray, writeJsonArray } from "./json-store";
-import type { Lead } from "./leads";
+import type { Lead as PrismaLead, LeadTimelineEntry as PrismaTimelineEntry } from "@prisma/client";
+import { prisma } from "./prisma";
+import type { Lead, LeadStatus } from "./leads";
 
-const FILE = "leads.json";
+function toLead(record: PrismaLead & { timeline: PrismaTimelineEntry[] }): Lead {
+  return {
+    id: record.id,
+    sourceUrl: record.sourceUrl,
+    businessName: record.businessName,
+    segment: record.segment ?? undefined,
+    contactEmail: record.contactEmail ?? undefined,
+    contactPhone: record.contactPhone ?? undefined,
+    status: record.status as LeadStatus,
+    estimatedMonthlyCost: record.estimatedMonthlyCost ?? undefined,
+    siteIdeas: record.siteIdeas,
+    mockupUrl: record.mockupUrl ?? undefined,
+    githubRepoUrl: record.githubRepoUrl ?? undefined,
+    timeline: record.timeline
+      .slice()
+      .sort((a, b) => a.at.getTime() - b.at.getTime())
+      .map((entry) => ({
+        at: entry.at.toISOString(),
+        label: entry.label,
+        detail: entry.detail ?? undefined,
+      })),
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString(),
+  };
+}
 
 export async function listLeads(): Promise<Lead[]> {
-  const items = await readJsonArray<Lead>(FILE);
-  return items.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const records = await prisma.lead.findMany({
+    include: { timeline: true },
+    orderBy: { updatedAt: "desc" },
+  });
+  return records.map(toLead);
 }
 
 export async function getLead(id: string): Promise<Lead | undefined> {
-  const items = await readJsonArray<Lead>(FILE);
-  return items.find((lead) => lead.id === id);
+  const record = await prisma.lead.findUnique({ where: { id }, include: { timeline: true } });
+  return record ? toLead(record) : undefined;
 }
 
 export async function createLead(
   input: Pick<Lead, "sourceUrl" | "businessName"> & Partial<Lead>
 ): Promise<Lead> {
-  const items = await readJsonArray<Lead>(FILE);
-  const now = new Date().toISOString();
-  const lead: Lead = {
-    id: randomUUID(),
-    segment: undefined,
-    contactEmail: undefined,
-    contactPhone: undefined,
-    status: "novo",
-    timeline: [{ at: now, label: "Lead criado", detail: input.sourceUrl }],
-    createdAt: now,
-    updatedAt: now,
-    ...input,
-  };
-  items.push(lead);
-  await writeJsonArray(FILE, items);
-  return lead;
+  const record = await prisma.lead.create({
+    data: {
+      sourceUrl: input.sourceUrl,
+      businessName: input.businessName,
+      segment: input.segment,
+      contactEmail: input.contactEmail,
+      contactPhone: input.contactPhone,
+      status: input.status ?? "novo",
+      estimatedMonthlyCost: input.estimatedMonthlyCost,
+      siteIdeas: input.siteIdeas ?? [],
+      mockupUrl: input.mockupUrl,
+      githubRepoUrl: input.githubRepoUrl,
+      timeline: {
+        create: [{ label: "Lead criado", detail: input.sourceUrl }],
+      },
+    },
+    include: { timeline: true },
+  });
+  return toLead(record);
 }
 
 export async function updateLead(
@@ -40,20 +70,28 @@ export async function updateLead(
   patch: Partial<Lead>,
   timelineEntry?: { label: string; detail?: string }
 ): Promise<Lead | undefined> {
-  const items = await readJsonArray<Lead>(FILE);
-  const idx = items.findIndex((lead) => lead.id === id);
-  if (idx === -1) return undefined;
+  const exists = await prisma.lead.findUnique({ where: { id } });
+  if (!exists) return undefined;
 
-  const now = new Date().toISOString();
-  const updated: Lead = {
-    ...items[idx],
-    ...patch,
-    updatedAt: now,
-    timeline: timelineEntry
-      ? [...items[idx].timeline, { at: now, ...timelineEntry }]
-      : items[idx].timeline,
-  };
-  items[idx] = updated;
-  await writeJsonArray(FILE, items);
-  return updated;
+  const record = await prisma.lead.update({
+    where: { id },
+    data: {
+      ...(patch.businessName !== undefined ? { businessName: patch.businessName } : {}),
+      ...(patch.segment !== undefined ? { segment: patch.segment } : {}),
+      ...(patch.contactEmail !== undefined ? { contactEmail: patch.contactEmail } : {}),
+      ...(patch.contactPhone !== undefined ? { contactPhone: patch.contactPhone } : {}),
+      ...(patch.status !== undefined ? { status: patch.status } : {}),
+      ...(patch.estimatedMonthlyCost !== undefined
+        ? { estimatedMonthlyCost: patch.estimatedMonthlyCost }
+        : {}),
+      ...(patch.siteIdeas !== undefined ? { siteIdeas: patch.siteIdeas } : {}),
+      ...(patch.mockupUrl !== undefined ? { mockupUrl: patch.mockupUrl } : {}),
+      ...(patch.githubRepoUrl !== undefined ? { githubRepoUrl: patch.githubRepoUrl } : {}),
+      ...(timelineEntry
+        ? { timeline: { create: [{ label: timelineEntry.label, detail: timelineEntry.detail }] } }
+        : {}),
+    },
+    include: { timeline: true },
+  });
+  return toLead(record);
 }

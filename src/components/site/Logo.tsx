@@ -1,0 +1,26 @@
+export function Logo({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 230 64" className={className} role="img" aria-label="ASTI Tech">
+      <defs>
+        <linearGradient id="astiMarkGradient" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#3b82f6" />
+          <stop offset="100%" stopColor="#22d3ee" />
+        </linearGradient>
+      </defs>
+
+      <g fill="none" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M32 6 L8 54 M32 6 L56 54" stroke="url(#astiMarkGradient)" strokeWidth="5.5" />
+        <path d="M8 54 L2 54 M56 54 L62 54" stroke="url(#astiMarkGradient)" strokeWidth="5.5" />
+        <path d="M22 46 L32 32 L42 46" stroke="url(#astiMarkGradient)" strokeWidth="4.5" />
+      </g>
+      <circle cx="32" cy="23" r="6.5" fill="#22d3ee" />
+
+      <text x="76" y="32" fontSize="27" fontWeight="700" fill="#eef1fb" fontFamily="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+        ASTI
+      </text>
+      <text x="77" y="52" fontSize="15" fontWeight="600" letterSpacing="5" fill="#22d3ee" fontFamily="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+        TECH
+      </text>
+    </svg>
+  );
+}

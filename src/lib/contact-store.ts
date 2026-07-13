@@ -1,4 +1,4 @@
-import { readJsonArray, writeJsonArray } from "./json-store";
+import { prisma } from "./prisma";
 
 export interface ContactMessage {
   name: string;
@@ -9,15 +9,26 @@ export interface ContactMessage {
   createdAt: string;
 }
 
-const FILE = "contact-messages.json";
-
 export async function appendContactMessage(entry: ContactMessage): Promise<void> {
-  const items = await readJsonArray<ContactMessage>(FILE);
-  items.push(entry);
-  await writeJsonArray(FILE, items);
+  await prisma.contactMessage.create({
+    data: {
+      name: entry.name,
+      email: entry.email,
+      phone: entry.phone,
+      business: entry.business,
+      message: entry.message,
+    },
+  });
 }
 
 export async function listContactMessages(): Promise<ContactMessage[]> {
-  const items = await readJsonArray<ContactMessage>(FILE);
-  return items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const records = await prisma.contactMessage.findMany({ orderBy: { createdAt: "desc" } });
+  return records.map((record) => ({
+    name: record.name,
+    email: record.email,
+    phone: record.phone ?? undefined,
+    business: record.business ?? undefined,
+    message: record.message,
+    createdAt: record.createdAt.toISOString(),
+  }));
 }

@@ -2,7 +2,7 @@
 
 import { Suspense, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Image from "next/image";
+import { Logo } from "@/components/site/Logo";
 
 function LoginForm() {
   const router = useRouter();
@@ -36,7 +36,7 @@ function LoginForm() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-6">
       <form onSubmit={handleSubmit} className="glow-card w-full max-w-sm rounded-2xl p-8">
-        <Image src="/logo.png" alt="ASTI Tech" width={140} height={61} className="mx-auto h-9 w-auto" />
+        <Logo className="mx-auto h-9 w-auto" />
         <h1 className="mt-6 text-center text-lg font-semibold text-foreground">Painel administrativo</h1>
         <p className="mt-1 text-center text-sm text-muted">Acesso restrito à equipe ASTI Tech</p>
 

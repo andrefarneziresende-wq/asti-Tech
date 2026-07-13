@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum LeadStatus {
+  novo
+  coletando_dados
+  gerando_site
+  publicando
+  email_enviado
+  respondeu_interessado
+  sem_interesse
+  erro
+}
+
+model Lead {
+  id                   String     @id @default(uuid())
+  sourceUrl            String
+  businessName         String
+  segment              String?
+  contactEmail         String?
+  contactPhone         String?
+  status               LeadStatus @default(novo)
+  estimatedMonthlyCost Float?
+  siteIdeas            String[]   @default([])
+  mockupUrl            String?
+  githubRepoUrl        String?
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  timeline             LeadTimelineEntry[]
+
+  @@map("leads")
+}
+
+model LeadTimelineEntry {
+  id     String   @id @default(uuid())
+  leadId String
+  lead   Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  at     DateTime @default(now())
+  label  String
+  detail String?
+
+  @@map("lead_timeline_entries")
+}
+
+model ContactMessage {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  phone     String?
+  business  String?
+  message   String
+  createdAt DateTime @default(now())
+
+  @@map("contact_messages")
+}
