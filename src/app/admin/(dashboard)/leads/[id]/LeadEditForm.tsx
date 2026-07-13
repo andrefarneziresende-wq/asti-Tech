@@ -3,6 +3,8 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Lead } from "@/lib/leads";
+import { isBlank, isValidEmail } from "@/lib/validation";
+import { FieldError } from "@/components/FieldError";
 
 export function LeadEditForm({ lead }: { lead: Lead }) {
   const router = useRouter();
@@ -10,10 +12,22 @@ export function LeadEditForm({ lead }: { lead: Lead }) {
   const [segment, setSegment] = useState(lead.segment ?? "");
   const [contactEmail, setContactEmail] = useState(lead.contactEmail ?? "");
   const [contactPhone, setContactPhone] = useState(lead.contactPhone ?? "");
+  const [errors, setErrors] = useState<{ businessName?: string; contactEmail?: string }>({});
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    setSaved(false);
+
+    const nextErrors: { businessName?: string; contactEmail?: string } = {};
+    if (isBlank(businessName)) nextErrors.businessName = "Informe o nome do negócio.";
+    if (!isBlank(contactEmail) && !isValidEmail(contactEmail)) {
+      nextErrors.contactEmail = "Informe um e-mail válido.";
+    }
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+
     setSaving(true);
 
     await fetch(`/api/admin/leads/${lead.id}`, {
@@ -23,20 +37,25 @@ export function LeadEditForm({ lead }: { lead: Lead }) {
     });
 
     setSaving(false);
+    setSaved(true);
     router.refresh();
   }
 
   return (
-    <form onSubmit={handleSubmit} className="glow-card space-y-4 rounded-2xl p-6">
+    <form onSubmit={handleSubmit} noValidate className="glow-card space-y-4 rounded-2xl p-6">
       <h2 className="text-sm font-semibold text-foreground">Dados do lead</h2>
 
       <div>
         <label className="text-xs font-medium text-muted">Nome do negócio</label>
         <input
           value={businessName}
-          onChange={(e) => setBusinessName(e.target.value)}
+          onChange={(e) => {
+            setBusinessName(e.target.value);
+            setErrors((prev) => ({ ...prev, businessName: undefined }));
+          }}
           className="mt-1 w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
         />
+        <FieldError message={errors.businessName} />
       </div>
 
       <div>
@@ -51,12 +70,15 @@ export function LeadEditForm({ lead }: { lead: Lead }) {
       <div>
         <label className="text-xs font-medium text-muted">E-mail de contato</label>
         <input
-          type="email"
           value={contactEmail}
-          onChange={(e) => setContactEmail(e.target.value)}
+          onChange={(e) => {
+            setContactEmail(e.target.value);
+            setErrors((prev) => ({ ...prev, contactEmail: undefined }));
+          }}
           placeholder="contato@negocio.com"
           className="mt-1 w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
         />
+        <FieldError message={errors.contactEmail} />
       </div>
 
       <div>
@@ -75,6 +97,7 @@ export function LeadEditForm({ lead }: { lead: Lead }) {
       >
         {saving ? "Salvando..." : "Salvar dados"}
       </button>
+      {saved && <p className="text-sm text-emerald-400">Salvo.</p>}
     </form>
   );
 }

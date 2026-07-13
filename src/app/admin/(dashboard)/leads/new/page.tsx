@@ -2,19 +2,34 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { isBlank, isValidUrl } from "@/lib/validation";
+import { FieldError } from "@/components/FieldError";
 
 export default function NewLeadPage() {
   const router = useRouter();
   const [url, setUrl] = useState("");
+  const [urlError, setUrlError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const [listingUrl, setListingUrl] = useState("");
+  const [listingUrlError, setListingUrlError] = useState("");
   const [listingLoading, setListingLoading] = useState(false);
   const [listingError, setListingError] = useState("");
 
+  function validateUrlField(value: string): string {
+    if (isBlank(value)) return "Informe a URL do anúncio.";
+    if (!isValidUrl(value)) return "Informe uma URL válida (começando com http:// ou https://).";
+    return "";
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+
+    const validationError = validateUrlField(url);
+    setUrlError(validationError);
+    if (validationError) return;
+
     setLoading(true);
     setError("");
 
@@ -42,6 +57,11 @@ export default function NewLeadPage() {
 
   async function handleListingSubmit(event: FormEvent) {
     event.preventDefault();
+
+    const validationError = validateUrlField(listingUrl);
+    setListingUrlError(validationError);
+    if (validationError) return;
+
     setListingLoading(true);
     setListingError("");
 
@@ -76,18 +96,20 @@ export default function NewLeadPage() {
           disponíveis). Pode levar alguns segundos.
         </div>
 
-        <form onSubmit={handleSubmit} className="glow-card mt-6 space-y-4 rounded-2xl p-6">
+        <form onSubmit={handleSubmit} noValidate className="glow-card mt-6 space-y-4 rounded-2xl p-6">
           <div>
             <label htmlFor="sourceUrl" className="text-xs font-medium text-muted">URL do anúncio</label>
             <input
               id="sourceUrl"
-              type="url"
-              required
               value={url}
-              onChange={(e) => setUrl(e.target.value)}
+              onChange={(e) => {
+                setUrl(e.target.value);
+                setUrlError("");
+              }}
               placeholder="https://www.exemplo.com/anuncio/123"
               className="mt-1 w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
             />
+            <FieldError message={urlError} />
           </div>
 
           {error && <p className="text-sm text-red-400">{error}</p>}
@@ -109,18 +131,20 @@ export default function NewLeadPage() {
           os anúncios individuais e cria um lead para cada um — até 5 por vez.
         </p>
 
-        <form onSubmit={handleListingSubmit} className="glow-card mt-6 space-y-4 rounded-2xl p-6">
+        <form onSubmit={handleListingSubmit} noValidate className="glow-card mt-6 space-y-4 rounded-2xl p-6">
           <div>
             <label htmlFor="listingUrl" className="text-xs font-medium text-muted">URL da lista/categoria</label>
             <input
               id="listingUrl"
-              type="url"
-              required
               value={listingUrl}
-              onChange={(e) => setListingUrl(e.target.value)}
+              onChange={(e) => {
+                setListingUrl(e.target.value);
+                setListingUrlError("");
+              }}
               placeholder="https://www.exemplo.com/categoria/servicos"
               className="mt-1 w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
             />
+            <FieldError message={listingUrlError} />
           </div>
 
           {listingError && <p className="text-sm text-red-400">{listingError}</p>}

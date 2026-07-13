@@ -1,17 +1,33 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { isBlank, isValidEmail } from "@/lib/validation";
+import { FieldError } from "@/components/FieldError";
 
 export function TestEmailForm({ initialTestEmailAddress }: { initialTestEmailAddress: string | null }) {
   const [enabled, setEnabled] = useState(Boolean(initialTestEmailAddress));
   const [email, setEmail] = useState(initialTestEmailAddress ?? "");
+  const [emailError, setEmailError] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    setSaving(true);
     setSaved(false);
+
+    if (enabled) {
+      if (isBlank(email)) {
+        setEmailError("Informe o e-mail que vai receber os testes.");
+        return;
+      }
+      if (!isValidEmail(email)) {
+        setEmailError("Informe um e-mail válido.");
+        return;
+      }
+    }
+    setEmailError("");
+
+    setSaving(true);
 
     await fetch("/api/admin/settings", {
       method: "PATCH",
@@ -24,7 +40,7 @@ export function TestEmailForm({ initialTestEmailAddress }: { initialTestEmailAdd
   }
 
   return (
-    <form onSubmit={handleSubmit} className="glow-card space-y-4 rounded-2xl p-6">
+    <form onSubmit={handleSubmit} noValidate className="glow-card space-y-4 rounded-2xl p-6">
       <div>
         <h2 className="text-sm font-semibold text-foreground">Modo de teste de e-mail</h2>
         <p className="mt-1 text-xs text-muted">
@@ -38,7 +54,10 @@ export function TestEmailForm({ initialTestEmailAddress }: { initialTestEmailAdd
         <input
           type="checkbox"
           checked={enabled}
-          onChange={(e) => setEnabled(e.target.checked)}
+          onChange={(e) => {
+            setEnabled(e.target.checked);
+            setEmailError("");
+          }}
           className="h-4 w-4 rounded border-border"
         />
         Ativar modo de teste
@@ -51,13 +70,15 @@ export function TestEmailForm({ initialTestEmailAddress }: { initialTestEmailAdd
           </label>
           <input
             id="testEmail"
-            type="email"
-            required={enabled}
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setEmailError("");
+            }}
             placeholder="voce@astitech.com.br"
             className="mt-1 w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
           />
+          <FieldError message={emailError} />
         </div>
       )}
 

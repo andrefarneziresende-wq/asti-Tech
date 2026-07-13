@@ -7,6 +7,8 @@ import {
   EMAIL_PLACEHOLDERS,
   renderEmailTemplate,
 } from "@/lib/email-template";
+import { isBlank } from "@/lib/validation";
+import { FieldError } from "@/components/FieldError";
 
 const SAMPLE_DATA = {
   businessName: "Oficina Mecânica Silva",
@@ -29,6 +31,7 @@ export function EmailTemplateEditor({
 }) {
   const [subject, setSubject] = useState(initialSubject);
   const [bodyHtml, setBodyHtml] = useState(initialBodyHtml);
+  const [errors, setErrors] = useState<{ subject?: string; bodyHtml?: string }>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -52,8 +55,15 @@ export function EmailTemplateEditor({
   }
 
   async function handleSave() {
-    setSaving(true);
     setSaved(false);
+
+    const nextErrors: { subject?: string; bodyHtml?: string } = {};
+    if (isBlank(subject)) nextErrors.subject = "Informe o assunto do e-mail.";
+    if (isBlank(bodyHtml)) nextErrors.bodyHtml = "O corpo do e-mail não pode ficar vazio.";
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+
+    setSaving(true);
 
     await fetch("/api/admin/settings", {
       method: "PATCH",
@@ -86,9 +96,13 @@ export function EmailTemplateEditor({
           <input
             id="subject"
             value={subject}
-            onChange={(e) => setSubject(e.target.value)}
+            onChange={(e) => {
+              setSubject(e.target.value);
+              setErrors((prev) => ({ ...prev, subject: undefined }));
+            }}
             className="mt-1 w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
           />
+          <FieldError message={errors.subject} />
 
           <div className="mt-4 flex flex-wrap gap-2">
             {EMAIL_PLACEHOLDERS.map((placeholder) => (
@@ -110,11 +124,15 @@ export function EmailTemplateEditor({
             ref={textareaRef}
             id="bodyHtml"
             value={bodyHtml}
-            onChange={(e) => setBodyHtml(e.target.value)}
+            onChange={(e) => {
+              setBodyHtml(e.target.value);
+              setErrors((prev) => ({ ...prev, bodyHtml: undefined }));
+            }}
             rows={16}
             spellCheck={false}
             className="mt-1 w-full rounded-lg border border-border bg-background px-4 py-3 font-mono text-xs leading-relaxed outline-none focus:border-primary"
           />
+          <FieldError message={errors.bodyHtml} />
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <button

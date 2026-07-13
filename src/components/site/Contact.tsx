@@ -2,26 +2,56 @@
 
 import { useState, type FormEvent } from "react";
 import { CONTACT_EMAIL, WHATSAPP_LINK } from "@/lib/contact";
+import { isBlank, isValidEmail } from "@/lib/validation";
+import { FieldError } from "@/components/FieldError";
 
 type Status = "idle" | "sending" | "sent" | "error";
 
+interface FormValues {
+  name: string;
+  email: string;
+  phone: string;
+  business: string;
+  message: string;
+}
+
+const INITIAL_VALUES: FormValues = { name: "", email: "", phone: "", business: "", message: "" };
+
+function validate(values: FormValues): Partial<Record<keyof FormValues, string>> {
+  const errors: Partial<Record<keyof FormValues, string>> = {};
+  if (isBlank(values.name)) errors.name = "Informe seu nome.";
+  if (isBlank(values.email)) errors.email = "Informe seu e-mail.";
+  else if (!isValidEmail(values.email)) errors.email = "Informe um e-mail válido.";
+  if (isBlank(values.message)) errors.message = "Escreva uma mensagem.";
+  return errors;
+}
+
 export function Contact() {
+  const [values, setValues] = useState<FormValues>(INITIAL_VALUES);
+  const [errors, setErrors] = useState<Partial<Record<keyof FormValues, string>>>({});
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState("");
 
+  function updateField(field: keyof FormValues, value: string) {
+    setValues((prev) => ({ ...prev, [field]: value }));
+    setErrors((prev) => ({ ...prev, [field]: undefined }));
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    const fieldErrors = validate(values);
+    setErrors(fieldErrors);
+    if (Object.keys(fieldErrors).length > 0) return;
+
     setStatus("sending");
     setErrorMessage("");
-
-    const form = event.currentTarget;
-    const data = Object.fromEntries(new FormData(form).entries());
 
     try {
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(values),
       });
 
       if (!res.ok) {
@@ -30,10 +60,10 @@ export function Contact() {
       }
 
       setStatus("sent");
-      form.reset();
+      setValues(INITIAL_VALUES);
     } catch (err) {
       setStatus("error");
-      setErrorMessage(err instanceof Error ? err.message : "Erro inesperado.");
+      setErrorMessage(err instanceof Error ? err.message : "Erro inesperado. Tente novamente.");
     }
   }
 
@@ -63,16 +93,17 @@ export function Contact() {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="glow-card space-y-4 rounded-2xl p-6">
+        <form onSubmit={handleSubmit} noValidate className="glow-card space-y-4 rounded-2xl p-6">
           <div>
             <label htmlFor="name" className="text-xs font-medium text-muted">Nome</label>
             <input
               id="name"
-              name="name"
-              required
+              value={values.name}
+              onChange={(e) => updateField("name", e.target.value)}
               className="mt-1 w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
               placeholder="Seu nome"
             />
+            <FieldError message={errors.name} />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -80,18 +111,19 @@ export function Contact() {
               <label htmlFor="email" className="text-xs font-medium text-muted">E-mail</label>
               <input
                 id="email"
-                name="email"
-                type="email"
-                required
+                value={values.email}
+                onChange={(e) => updateField("email", e.target.value)}
                 className="mt-1 w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
                 placeholder="voce@empresa.com"
               />
+              <FieldError message={errors.email} />
             </div>
             <div>
               <label htmlFor="phone" className="text-xs font-medium text-muted">WhatsApp</label>
               <input
                 id="phone"
-                name="phone"
+                value={values.phone}
+                onChange={(e) => updateField("phone", e.target.value)}
                 className="mt-1 w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
                 placeholder="(11) 90000-0000"
               />
@@ -102,7 +134,8 @@ export function Contact() {
             <label htmlFor="business" className="text-xs font-medium text-muted">Nome do negócio</label>
             <input
               id="business"
-              name="business"
+              value={values.business}
+              onChange={(e) => updateField("business", e.target.value)}
               className="mt-1 w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
               placeholder="Nome da sua empresa"
             />
@@ -112,12 +145,13 @@ export function Contact() {
             <label htmlFor="message" className="text-xs font-medium text-muted">Mensagem</label>
             <textarea
               id="message"
-              name="message"
+              value={values.message}
+              onChange={(e) => updateField("message", e.target.value)}
               rows={4}
-              required
               className="mt-1 w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
               placeholder="Conte um pouco sobre o que você precisa"
             />
+            <FieldError message={errors.message} />
           </div>
 
           <button

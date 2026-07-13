@@ -3,17 +3,29 @@
 import { Suspense, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Logo } from "@/components/site/Logo";
+import { isBlank, isValidEmail } from "@/lib/validation";
+import { FieldError } from "@/components/FieldError";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+
+    const errors: { email?: string; password?: string } = {};
+    if (isBlank(email)) errors.email = "Informe seu e-mail.";
+    else if (!isValidEmail(email)) errors.email = "Informe um e-mail válido.";
+    if (isBlank(password)) errors.password = "Informe sua senha.";
+
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
     setLoading(true);
     setError("");
 
@@ -37,7 +49,7 @@ function LoginForm() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-6">
-      <form onSubmit={handleSubmit} className="glow-card w-full max-w-sm rounded-2xl p-8">
+      <form onSubmit={handleSubmit} noValidate className="glow-card w-full max-w-sm rounded-2xl p-8">
         <Logo className="mx-auto h-9 w-auto" />
         <h1 className="mt-6 text-center text-lg font-semibold text-foreground">Painel administrativo</h1>
         <p className="mt-1 text-center text-sm text-muted">Acesso restrito à equipe ASTI Tech</p>
@@ -46,13 +58,15 @@ function LoginForm() {
           <label htmlFor="email" className="text-xs font-medium text-muted">E-mail</label>
           <input
             id="email"
-            type="email"
-            required
             autoFocus
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setFieldErrors((prev) => ({ ...prev, email: undefined }));
+            }}
             className="mt-1 w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
           />
+          <FieldError message={fieldErrors.email} />
         </div>
 
         <div className="mt-4">
@@ -60,11 +74,14 @@ function LoginForm() {
           <input
             id="password"
             type="password"
-            required
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setFieldErrors((prev) => ({ ...prev, password: undefined }));
+            }}
             className="mt-1 w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
           />
+          <FieldError message={fieldErrors.password} />
         </div>
 
         {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
