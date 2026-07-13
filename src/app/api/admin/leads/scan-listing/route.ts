@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { createLead, listLeads } from "@/lib/leads-store";
-import { createJob, updateJob } from "@/lib/jobs-store";
+import { createJob, updateJob, getJob } from "@/lib/jobs-store";
 import { scanListingUrl, estimateMonthlyCost, MAX_LISTING_LEADS } from "@/lib/pipeline";
 import { assertPublicHttpUrl } from "@/lib/fetch-page";
+import { withTimeout } from "@/lib/timeout";
 
 export const maxDuration = 60;
+
+// Deixa uma margem antes do limite da função, pra garantir que o erro seja
+// gravado no job antes da plataforma matar a execução sem aviso — importante
+// quando o site de destino está fora do ar ou muito lento.
+const SCAN_TIMEOUT_MS = 50000;
 
 async function runListingScan(jobId: string, listingUrl: string) {
   await updateJob(jobId, { status: "processando" });
@@ -14,34 +20,51 @@ async function runListingScan(jobId: string, listingUrl: string) {
   let leadsCreated = 0;
 
   try {
-    const result = await scanListingUrl(listingUrl, {
-      onProgress: async (message) => {
-        await updateJob(jobId, {}, message);
-      },
-      onCandidatesFound: async (count) => {
-        await updateJob(jobId, { candidatesFound: count });
-      },
-      onLinksSelected: async (count) => {
-        await updateJob(jobId, { totalToProcess: count });
-      },
-      onLeadFound: async (item) => {
-        if (existingUrls.has(item.sourceUrl)) {
-          await updateJob(jobId, {}, `Já existe um lead para ${item.sourceUrl}, pulando.`);
-          return;
-        }
-        await createLead({
-          sourceUrl: item.sourceUrl,
-          businessName: item.businessName,
-          segment: item.segment,
-          contactEmail: item.contactEmail,
-          contactPhone: item.contactPhone,
-          estimatedMonthlyCost: estimateMonthlyCost(item),
-        });
-        existingUrls.add(item.sourceUrl);
-        leadsCreated += 1;
-        await updateJob(jobId, { leadsCreated });
-      },
-    });
+    const result = await withTimeout(
+      scanListingUrl(listingUrl, {
+        onProgress: async (message) => {
+          await updateJob(jobId, {}, message);
+        },
+        onCandidatesFound: async (count) => {
+          await updateJob(jobId, { candidatesFound: count });
+        },
+        onLinksSelected: async (count) => {
+          await updateJob(jobId, { totalToProcess: count });
+        },
+        onLeadFound: async (item) => {
+          if (existingUrls.has(item.sourceUrl)) {
+            await updateJob(jobId, {}, `Já existe um lead para ${item.sourceUrl}, pulando.`);
+            return;
+          }
+          await createLead({
+            sourceUrl: item.sourceUrl,
+            businessName: item.businessName,
+            segment: item.segment,
+            contactEmail: item.contactEmail,
+            contactPhone: item.contactPhone,
+            estimatedMonthlyCost: estimateMonthlyCost(item),
+          });
+          existingUrls.add(item.sourceUrl);
+          leadsCreated += 1;
+          await updateJob(jobId, { leadsCreated });
+        },
+        shouldStop: async () => {
+          const current = await getJob(jobId);
+          return current?.status === "cancelado";
+        },
+      }),
+      SCAN_TIMEOUT_MS,
+      "Tempo esgotado durante a varredura (mais de 50s). O site de destino pode estar fora do ar ou muito lento."
+    );
+
+    if (result.cancelled) {
+      await updateJob(
+        jobId,
+        {},
+        `Varredura cancelada: ${result.leadsCreated} lead(s) criado(s) de ${result.candidatesFound} link(s) encontrados antes do cancelamento.`
+      );
+      return;
+    }
 
     await updateJob(
       jobId,

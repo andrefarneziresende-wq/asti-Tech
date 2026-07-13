@@ -7,7 +7,8 @@ export type LeadStatus =
   | "email_enviado"
   | "respondeu_interessado"
   | "sem_interesse"
-  | "erro";
+  | "erro"
+  | "cancelado";
 
 export const STATUS_LABELS: Record<LeadStatus, string> = {
   novo: "Novo",
@@ -19,7 +20,11 @@ export const STATUS_LABELS: Record<LeadStatus, string> = {
   respondeu_interessado: "Cliente interessado",
   sem_interesse: "Sem interesse",
   erro: "Erro no processo",
+  cancelado: "Cancelado pelo usuário",
 };
+
+// Status em que o robô está rodando em segundo plano e pode ser cancelado.
+export const RUNNING_LEAD_STATUSES: LeadStatus[] = ["gerando_site", "publicando"];
 
 export const STATUS_ORDER: LeadStatus[] = [
   "novo",

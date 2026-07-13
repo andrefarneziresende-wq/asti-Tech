@@ -6,19 +6,22 @@ import { JOB_STATUS_LABELS, type ScanJob } from "@/lib/jobs";
 
 const POLL_INTERVAL_MS = 2000;
 
+const FINISHED_STATUSES = ["concluido", "erro", "cancelado"];
+
 export function JobLiveView({ initialJob }: { initialJob: ScanJob }) {
   const [job, setJob] = useState(initialJob);
+  const [cancelling, setCancelling] = useState(false);
   const pollRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (job.status === "concluido" || job.status === "erro") return;
+    if (FINISHED_STATUSES.includes(job.status)) return;
 
     pollRef.current = window.setInterval(async () => {
       const res = await fetch(`/api/admin/jobs/${job.id}`);
       if (!res.ok) return;
       const body = await res.json();
       setJob(body.job);
-      if (body.job.status === "concluido" || body.job.status === "erro") {
+      if (FINISHED_STATUSES.includes(body.job.status)) {
         if (pollRef.current) window.clearInterval(pollRef.current);
       }
     }, POLL_INTERVAL_MS);
@@ -28,6 +31,17 @@ export function JobLiveView({ initialJob }: { initialJob: ScanJob }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [job.id]);
+
+  async function handleCancel() {
+    setCancelling(true);
+    try {
+      const res = await fetch(`/api/admin/jobs/${job.id}/cancel`, { method: "POST" });
+      const body = await res.json();
+      if (res.ok) setJob(body.job);
+    } finally {
+      setCancelling(false);
+    }
+  }
 
   const running = job.status === "pendente" || job.status === "processando";
   const progressPct =
@@ -47,7 +61,9 @@ export function JobLiveView({ initialJob }: { initialJob: ScanJob }) {
                 ? "border-primary/40 text-accent"
                 : job.status === "concluido"
                   ? "border-emerald-500/40 text-emerald-400"
-                  : "border-red-500/40 text-red-400"
+                  : job.status === "cancelado"
+                    ? "border-amber-500/40 text-amber-400"
+                    : "border-red-500/40 text-red-400"
             }`}
           >
             {running && (
@@ -56,12 +72,24 @@ export function JobLiveView({ initialJob }: { initialJob: ScanJob }) {
             {JOB_STATUS_LABELS[job.status]}
           </span>
         </div>
-        <Link
-          href="/admin/leads"
-          className="rounded-full border border-border px-5 py-2 text-sm text-muted transition-colors hover:border-primary hover:text-foreground"
-        >
-          Ver leads
-        </Link>
+        <div className="flex items-center gap-3">
+          {running && (
+            <button
+              type="button"
+              onClick={handleCancel}
+              disabled={cancelling}
+              className="rounded-full border border-red-500/40 px-5 py-2 text-sm text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+            >
+              {cancelling ? "Cancelando..." : "Parar varredura"}
+            </button>
+          )}
+          <Link
+            href="/admin/leads"
+            className="rounded-full border border-border px-5 py-2 text-sm text-muted transition-colors hover:border-primary hover:text-foreground"
+          >
+            Ver leads
+          </Link>
+        </div>
       </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_280px]">

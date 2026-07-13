@@ -8,59 +8,84 @@ import {
   estimateMonthlyCost,
   slugify,
 } from "@/lib/pipeline";
+import { withTimeout } from "@/lib/timeout";
 
 // Gerar o site com a Claude + publicar no GitHub pode levar mais de um minuto.
 // No plano gratuito da Vercel, 60s é o máximo permitido para uma função — em
 // planos pagos (Pro+) dá pra aumentar esse valor se o job estiver estourando.
 export const maxDuration = 60;
 
+// Deixa uma margem antes do limite da função, pra garantir que o "erro" seja
+// gravado no lead antes da plataforma matar a execução sem aviso.
+const PIPELINE_TIMEOUT_MS = 50000;
+
 function siteUrlFor(slug: string): string {
   const base = process.env.SITE_URL ?? "http://localhost:3000";
   return `${base.replace(/\/$/, "")}/${slug}`;
 }
 
+async function isCancelled(id: string): Promise<boolean> {
+  const current = await getLead(id);
+  return current?.status === "cancelado";
+}
+
+async function runPipelineSteps(id: string) {
+  let lead = await getLead(id);
+  if (!lead) return;
+
+  const { ideas, html } = await generateSiteWithClaude(lead);
+
+  if (await isCancelled(id)) return;
+
+  const estimatedMonthlyCost = lead.estimatedMonthlyCost ?? estimateMonthlyCost(lead);
+  const slug = `${slugify(lead.businessName)}-${lead.id.slice(0, 6)}`;
+  const mockupUrl = siteUrlFor(slug);
+
+  lead = (await updateLead(
+    id,
+    { status: "publicando", siteIdeas: ideas, siteHtml: html, slug, estimatedMonthlyCost, mockupUrl },
+    { label: "Site gerado, publicando mockup", detail: mockupUrl }
+  ))!;
+
+  const { repoUrl } = await publishToGithub({ ...lead, slug, siteHtml: html });
+
+  if (await isCancelled(id)) return;
+
+  lead = (await updateLead(
+    id,
+    { githubRepoUrl: repoUrl },
+    { label: "Código enviado ao GitHub", detail: repoUrl }
+  ))!;
+
+  if (await isCancelled(id)) return;
+
+  const settings = await getAppSettings();
+
+  if (!settings.autoSendEmail) {
+    await updateLead(
+      id,
+      { status: "pronto_para_email" },
+      { label: "Pronto para enviar e-mail (envio manual ativado)" }
+    );
+    return;
+  }
+
+  const emailResult = await sendClientEmail(lead);
+
+  if (emailResult.sent) {
+    await updateLead(id, { status: "email_enviado" }, { label: "E-mail enviado ao cliente", detail: lead.contactEmail });
+  } else {
+    await updateLead(id, {}, { label: "E-mail não enviado", detail: emailResult.reason });
+  }
+}
+
 async function runPipeline(id: string) {
   try {
-    let lead = await getLead(id);
-    if (!lead) return;
-
-    const { ideas, html } = await generateSiteWithClaude(lead);
-    const estimatedMonthlyCost = lead.estimatedMonthlyCost ?? estimateMonthlyCost(lead);
-    const slug = `${slugify(lead.businessName)}-${lead.id.slice(0, 6)}`;
-    const mockupUrl = siteUrlFor(slug);
-
-    lead = (await updateLead(
-      id,
-      { status: "publicando", siteIdeas: ideas, siteHtml: html, slug, estimatedMonthlyCost, mockupUrl },
-      { label: "Site gerado, publicando mockup", detail: mockupUrl }
-    ))!;
-
-    const { repoUrl } = await publishToGithub({ ...lead, slug, siteHtml: html });
-
-    lead = (await updateLead(
-      id,
-      { githubRepoUrl: repoUrl },
-      { label: "Código enviado ao GitHub", detail: repoUrl }
-    ))!;
-
-    const settings = await getAppSettings();
-
-    if (!settings.autoSendEmail) {
-      await updateLead(
-        id,
-        { status: "pronto_para_email" },
-        { label: "Pronto para enviar e-mail (envio manual ativado)" }
-      );
-      return;
-    }
-
-    const emailResult = await sendClientEmail(lead);
-
-    if (emailResult.sent) {
-      await updateLead(id, { status: "email_enviado" }, { label: "E-mail enviado ao cliente", detail: lead.contactEmail });
-    } else {
-      await updateLead(id, {}, { label: "E-mail não enviado", detail: emailResult.reason });
-    }
+    await withTimeout(
+      runPipelineSteps(id),
+      PIPELINE_TIMEOUT_MS,
+      "Tempo esgotado ao processar o lead (mais de 50s). Tente rodar o robô de novo."
+    );
   } catch (err) {
     await updateLead(
       id,

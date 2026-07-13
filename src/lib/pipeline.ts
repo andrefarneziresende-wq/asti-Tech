@@ -52,6 +52,8 @@ export interface ScanListingCallbacks {
   onCandidatesFound?: (count: number) => Promise<void> | void;
   onLinksSelected?: (count: number) => Promise<void> | void;
   onLeadFound: (lead: ScannedLead) => Promise<void>;
+  /** Checado antes de cada anúncio; se retornar true, a varredura para nesse ponto. */
+  shouldStop?: () => Promise<boolean>;
 }
 
 /**
@@ -66,7 +68,7 @@ export interface ScanListingCallbacks {
 export async function scanListingUrl(
   listingUrl: string,
   callbacks: ScanListingCallbacks
-): Promise<{ candidatesFound: number; leadsCreated: number; errors: string[] }> {
+): Promise<{ candidatesFound: number; leadsCreated: number; errors: string[]; cancelled: boolean }> {
   const url = assertPublicHttpUrl(listingUrl);
 
   return withBrowser(async (browser) => {
@@ -91,6 +93,11 @@ export async function scanListingUrl(
     const errors: string[] = [];
 
     for (const [index, adUrl] of selected.entries()) {
+      if (await callbacks.shouldStop?.()) {
+        await callbacks.onProgress?.("Varredura cancelada pelo usuário.");
+        return { candidatesFound: candidateLinks.length, leadsCreated, errors, cancelled: true };
+      }
+
       await callbacks.onProgress?.(`Processando anúncio ${index + 1}/${selected.length}: ${adUrl}`);
       try {
         const adHtml = await renderPageHtml(browser, adUrl);
@@ -112,7 +119,7 @@ export async function scanListingUrl(
       }
     }
 
-    return { candidatesFound: candidateLinks.length, leadsCreated, errors };
+    return { candidatesFound: candidateLinks.length, leadsCreated, errors, cancelled: false };
   });
 }
 

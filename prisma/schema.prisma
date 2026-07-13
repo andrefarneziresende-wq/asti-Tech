@@ -18,6 +18,7 @@ enum LeadStatus {
   respondeu_interessado
   sem_interesse
   erro
+  cancelado
 }
 
 model Lead {
@@ -81,6 +82,7 @@ enum JobStatus {
   processando
   concluido
   erro
+  cancelado
 }
 
 /// Job em segundo plano (ex: varredura de uma lista de anúncios), com log de

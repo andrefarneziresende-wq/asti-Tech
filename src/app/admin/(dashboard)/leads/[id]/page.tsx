@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import { getLead } from "@/lib/leads-store";
-import { STATUS_LABELS } from "@/lib/leads";
+import { STATUS_LABELS, RUNNING_LEAD_STATUSES } from "@/lib/leads";
 import { RunJobButton } from "./RunJobButton";
 import { LeadEditForm } from "./LeadEditForm";
 import { SendEmailButton } from "./SendEmailButton";
+import { CancelLeadButton } from "./CancelLeadButton";
 
 export const dynamic = "force-dynamic";
 
@@ -23,11 +24,14 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             {STATUS_LABELS[lead.status]}
           </span>
         </div>
-        {lead.status === "pronto_para_email" ? (
-          <SendEmailButton leadId={lead.id} />
-        ) : (
-          <RunJobButton leadId={lead.id} hasEmail={Boolean(lead.contactEmail)} />
-        )}
+        <div className="flex items-center gap-3">
+          {lead.status === "pronto_para_email" ? (
+            <SendEmailButton leadId={lead.id} />
+          ) : (
+            <RunJobButton leadId={lead.id} hasEmail={Boolean(lead.contactEmail)} />
+          )}
+          {RUNNING_LEAD_STATUSES.includes(lead.status) && <CancelLeadButton leadId={lead.id} />}
+        </div>
       </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_320px]">

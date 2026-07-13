@@ -1,11 +1,14 @@
-export type JobStatus = "pendente" | "processando" | "concluido" | "erro";
+export type JobStatus = "pendente" | "processando" | "concluido" | "erro" | "cancelado";
 
 export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
   pendente: "Pendente",
   processando: "Processando",
   concluido: "Concluído",
   erro: "Erro",
+  cancelado: "Cancelado",
 };
+
+export const RUNNING_JOB_STATUSES: JobStatus[] = ["pendente", "processando"];
 
 export interface ScanJobLogEntry {
   at: string;
