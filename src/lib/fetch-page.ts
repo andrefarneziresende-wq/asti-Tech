@@ -127,3 +127,31 @@ export function extractImageUrls(html: string, baseUrl: string, max = 8): string
 
   return urls;
 }
+
+/**
+ * Heurística pra estimar se um site parece desatualizado/precisa de redesign
+ * (usado pro filtro "só sites antigos" — leads do serviço de redesign). Não é
+ * perfeito (é uma estimativa por sinais técnicos comuns em sites antigos, não
+ * uma análise de design de verdade), mas é rápido e não custa uma chamada de
+ * IA extra por candidato.
+ */
+export function looksOutdated(html: string, websiteUrl: string): boolean {
+  let score = 0;
+
+  if (!/<meta[^>]+name=["']viewport["']/i.test(html)) score += 2; // não responsivo
+  if (websiteUrl.startsWith("http://")) score += 1; // sem HTTPS
+  if (/<font[\s>]/i.test(html)) score += 1; // tag HTML4 obsoleta
+  if (/<marquee[\s>]|<blink[\s>]/i.test(html)) score += 2; // relíquia dos anos 2000
+  if (/<table[^>]*>[\s\S]*<table[^>]*>/i.test(html)) score += 1; // layout provavelmente feito em tabelas aninhadas
+  if (!/<meta[^>]+name=["']description["']/i.test(html)) score += 1; // sem SEO básico
+
+  const currentYear = new Date().getFullYear();
+  const years = Array.from(html.matchAll(/(?:19|20)\d{2}/g)).map((m) => Number(m[0]));
+  const copyrightYears = years.filter((y) => y >= 1995 && y <= currentYear);
+  if (copyrightYears.length > 0) {
+    const mostRecent = Math.max(...copyrightYears);
+    if (mostRecent <= currentYear - 4) score += 2;
+  }
+
+  return score >= 3;
+}

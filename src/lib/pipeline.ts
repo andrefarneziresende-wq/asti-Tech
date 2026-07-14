@@ -8,6 +8,7 @@ import {
   htmlToText,
   extractSameOriginLinks,
   extractImageUrls,
+  looksOutdated,
 } from "./fetch-page";
 import { withBrowser, renderPageHtml } from "./browser";
 import { searchPlacesByText, resolvePlacePhotoUrl, segmentFromTypes, type PlaceResult } from "./places";
@@ -161,6 +162,10 @@ export interface GeoScanOptions {
   siteFilter?: SiteFilter;
   /** Se true, só cria o lead quando conseguir achar um e-mail de contato (visitando o site, quando houver). */
   requireEmail?: boolean;
+  /** Descarta candidatos cujo nome ou categoria (types do Places) contenha algum desses termos (ex: "loja virtual", "e-commerce"). */
+  excludeKeywords?: string[];
+  /** Só aceita candidatos com site que pareça desatualizado (heurística) — ignorado quando siteFilter não inclui "com_site"/"qualquer". */
+  onlyOutdatedSites?: boolean;
 }
 
 function resolveGeoOptions(options: GeoScanOptions): Required<GeoScanOptions> {
@@ -168,6 +173,8 @@ function resolveGeoOptions(options: GeoScanOptions): Required<GeoScanOptions> {
     maxLeads: Math.min(Math.max(Math.trunc(options.maxLeads ?? DEFAULT_GEO_LEADS), 1), MAX_GEO_LEADS_CAP),
     siteFilter: options.siteFilter ?? "sem_site",
     requireEmail: options.requireEmail ?? false,
+    excludeKeywords: (options.excludeKeywords ?? []).map((k) => k.toLowerCase().trim()).filter(Boolean),
+    onlyOutdatedSites: options.onlyOutdatedSites ?? false,
   };
 }
 
@@ -177,8 +184,17 @@ function passesSiteFilter(place: PlaceResult, siteFilter: SiteFilter): boolean {
   return true;
 }
 
-/** Visita o site já cadastrado do comércio pra tentar achar e-mail, descrição e identidade visual reais. */
-async function enrichFromWebsite(websiteUrl: string, businessName: string): Promise<Partial<ScannedLead>> {
+function passesExcludeKeywords(place: PlaceResult, excludeKeywords: string[]): boolean {
+  if (excludeKeywords.length === 0) return true;
+  const haystack = `${place.displayName} ${place.types.join(" ")}`.toLowerCase();
+  return !excludeKeywords.some((keyword) => haystack.includes(keyword));
+}
+
+/** Visita o site já cadastrado do comércio pra tentar achar e-mail, descrição, identidade visual reais e sinais de site desatualizado. */
+async function enrichFromWebsite(
+  websiteUrl: string,
+  businessName: string
+): Promise<Partial<ScannedLead> & { siteLooksOutdated?: boolean }> {
   try {
     const html = await fetchPageHtml(websiteUrl);
     const pageText = htmlToText(html).slice(0, 15000);
@@ -191,6 +207,7 @@ async function enrichFromWebsite(websiteUrl: string, businessName: string): Prom
       businessDescription: info.description || undefined,
       logoUrl: brand.logoUrl && imageUrls.includes(brand.logoUrl) ? brand.logoUrl : undefined,
       brandColors: brand.colors.length ? brand.colors : undefined,
+      siteLooksOutdated: looksOutdated(html, websiteUrl),
     };
   } catch {
     // Site fora do ar, bloqueando o robô, etc. — segue sem esses dados extras.
@@ -203,7 +220,8 @@ async function enrichFromWebsite(websiteUrl: string, businessName: string): Prom
  * site, visita esse site pra tentar achar e-mail/descrição/identidade visual
  * reais; sem site (ou se o site não render nada útil), tenta identificar
  * logo/cores a partir das fotos cadastradas no Google Places. Devolve `null`
- * quando `requireEmail` está ativo e nenhum e-mail foi encontrado — sinal
+ * quando `requireEmail` está ativo e nenhum e-mail foi encontrado, ou quando
+ * `onlyOutdatedSites` está ativo e o site não pareceu desatualizado — sinal
  * pro chamador pular esse candidato sem contar como erro.
  */
 async function placeToScannedLead(
@@ -213,6 +231,10 @@ async function placeToScannedLead(
   const enriched = place.websiteUri ? await enrichFromWebsite(place.websiteUri, place.displayName) : {};
 
   if (options.requireEmail && !enriched.contactEmail) {
+    return null;
+  }
+
+  if (options.onlyOutdatedSites && !enriched.siteLooksOutdated) {
     return null;
   }
 
@@ -268,7 +290,7 @@ async function processPlaceCandidates(
     try {
       const scanned = await placeToScannedLead(place, options);
       if (!scanned) {
-        await callbacks.onProgress?.(`Pulado (sem e-mail encontrado): ${place.displayName}`);
+        await callbacks.onProgress?.(`Pulado (não passou nos filtros): ${place.displayName}`);
         continue;
       }
       await callbacks.onLeadFound(scanned);
@@ -299,9 +321,10 @@ export async function scanGeographicArea(
   const resolved = resolveGeoOptions(options);
   await callbacks.onProgress?.(`Buscando comércios no Google Places: "${query}"...`);
 
-  // Quando precisa de e-mail, vários candidatos podem ser descartados por
-  // não ter um — busca mais páginas de antemão pra ter candidatos de sobra.
-  const targetPoolSize = resolved.requireEmail ? resolved.maxLeads * 4 : resolved.maxLeads;
+  // Quando precisa de e-mail ou só sites antigos, vários candidatos podem ser
+  // descartados — busca mais páginas de antemão pra ter candidatos de sobra.
+  const targetPoolSize =
+    resolved.requireEmail || resolved.onlyOutdatedSites ? resolved.maxLeads * 4 : resolved.maxLeads;
 
   const candidates: PlaceResult[] = [];
   let totalFound = 0;
@@ -310,7 +333,11 @@ export async function scanGeographicArea(
   for (let page = 0; page < 3 && candidates.length < targetPoolSize; page += 1) {
     const { places, nextPageToken } = await searchPlacesByText(query, pageToken);
     totalFound += places.length;
-    candidates.push(...places.filter((p) => passesSiteFilter(p, resolved.siteFilter)));
+    candidates.push(
+      ...places.filter(
+        (p) => passesSiteFilter(p, resolved.siteFilter) && passesExcludeKeywords(p, resolved.excludeKeywords)
+      )
+    );
     if (!nextPageToken) break;
     pageToken = nextPageToken;
     // A API do Places exige uma pequena espera antes do pageToken ficar válido.
@@ -359,7 +386,9 @@ export async function scanGeographicGrid(
       const { places } = await searchPlacesByText(query, undefined, cell);
       totalFound += places.length;
       for (const place of places) {
-        if (passesSiteFilter(place, resolved.siteFilter)) seen.set(place.id, place);
+        if (passesSiteFilter(place, resolved.siteFilter) && passesExcludeKeywords(place, resolved.excludeKeywords)) {
+          seen.set(place.id, place);
+        }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

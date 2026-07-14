@@ -110,11 +110,15 @@ export async function POST(req: NextRequest) {
 
   const siteFilter: SiteFilter = VALID_SITE_FILTERS.includes(body?.siteFilter) ? body.siteFilter : "sem_site";
   const requireEmail = body?.requireEmail === true;
+  const onlyOutdatedSites = body?.onlyOutdatedSites === true;
+  const excludeKeywords = Array.isArray(body?.excludeKeywords)
+    ? body.excludeKeywords.filter((k: unknown): k is string => typeof k === "string" && k.trim().length > 0)
+    : [];
   const maxLeads = Math.min(
     Math.max(Math.trunc(Number(body?.maxLeads) || DEFAULT_GEO_LEADS), 1),
     MAX_GEO_LEADS_CAP
   );
-  const options: GeoScanOptions = { maxLeads, siteFilter, requireEmail };
+  const options: GeoScanOptions = { maxLeads, siteFilter, requireEmail, excludeKeywords, onlyOutdatedSites };
 
   let cells: GridCell[] | undefined;
   if (area && typeof area.lat === "number" && typeof area.lng === "number" && typeof area.radiusMeters === "number") {

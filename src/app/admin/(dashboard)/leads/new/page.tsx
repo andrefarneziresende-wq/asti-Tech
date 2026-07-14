@@ -25,6 +25,8 @@ export default function NewLeadPage() {
   const [geoArea, setGeoArea] = useState<SelectedArea | null>(null);
   const [siteFilter, setSiteFilter] = useState<"sem_site" | "com_site" | "qualquer">("sem_site");
   const [requireEmail, setRequireEmail] = useState(false);
+  const [onlyOutdatedSites, setOnlyOutdatedSites] = useState(false);
+  const [excludeKeywords, setExcludeKeywords] = useState("");
   const [maxLeads, setMaxLeads] = useState(5);
 
   function validateUrlField(value: string): string {
@@ -111,6 +113,11 @@ export default function NewLeadPage() {
         area: geoArea ?? undefined,
         siteFilter,
         requireEmail,
+        onlyOutdatedSites,
+        excludeKeywords: excludeKeywords
+          .split(",")
+          .map((k) => k.trim())
+          .filter(Boolean),
         maxLeads,
       }),
     });
@@ -263,6 +270,22 @@ export default function NewLeadPage() {
             </div>
           </div>
 
+          <div>
+            <label htmlFor="excludeKeywords" className="text-xs font-medium text-muted">
+              Excluir (opcional, separado por vírgula)
+            </label>
+            <input
+              id="excludeKeywords"
+              value={excludeKeywords}
+              onChange={(e) => setExcludeKeywords(e.target.value)}
+              placeholder="Ex: loja virtual, e-commerce, atacado"
+              className="mt-1 w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
+            />
+            <p className="mt-1 text-xs text-muted">
+              Descarta comércios cujo nome ou categoria contenha algum desses termos.
+            </p>
+          </div>
+
           <label className="flex items-center gap-2 text-sm text-foreground">
             <input
               type="checkbox"
@@ -277,6 +300,23 @@ export default function NewLeadPage() {
               O Google Places não devolve e-mail — só conseguimos achar um visitando o site do
               comércio. Com &quot;só quem não tem site&quot;, praticamente nenhum vai ter e-mail
               encontrado. Considere &quot;qualquer um&quot; ou &quot;só quem já tem site&quot;.
+            </p>
+          )}
+
+          <label className="flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={onlyOutdatedSites}
+              onChange={(e) => setOnlyOutdatedSites(e.target.checked)}
+              className="h-4 w-4 rounded border-border"
+            />
+            Só sites que parecem desatualizados (leads de redesign)
+          </label>
+          {onlyOutdatedSites && siteFilter === "sem_site" && (
+            <p className="text-xs text-amber-300">
+              Isso só faz sentido pra comércios que JÁ têm site. Com &quot;só quem não tem
+              site&quot;, esse filtro não vai encontrar nada. Considere &quot;só quem já tem
+              site&quot; ou &quot;qualquer um&quot;.
             </p>
           )}
 
