@@ -18,16 +18,64 @@ const OUTPUT_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-const VISUAL_STYLES = [
-  "moderno minimalista: muito espaço em branco, tipografia grande e poucos elementos",
-  "moderno vibrante: blocos de cor sólida, formas geométricas e contrastes fortes",
-  "moderno corporativo: gradientes sutis, bastante hierarquia visual e ares premium",
-  "moderno acolhedor: bordas arredondadas, texturas suaves e tom pessoal/artesanal",
-  "moderno editorial: grid assimétrico inspirado em revistas, destaque pra fotos/texto",
+interface VisualStyle {
+  name: string;
+  fonts: string;
+  palette: string[];
+  layout: string;
+}
+
+// Cada estilo tem fonte e paleta CONCRETAS (não só um adjetivo) — sem isso, o
+// modelo tende a convergir sempre pro mesmo "look" seguro de site gerado por
+// IA (gradiente roxo-azul, Inter, cards centralizados com cantos
+// arredondados), independente do adjetivo de estilo pedido.
+const VISUAL_STYLES: VisualStyle[] = [
+  {
+    name: "Minimalista editorial",
+    fonts: 'títulos em uma serifada elegante tipo Fraunces/Playfair Display (via font-family com fallback pra serif), corpo em Inter/system-ui',
+    palette: ["#1a1a1a", "#faf9f6", "#c9a24b"],
+    layout:
+      "muito espaço em branco, título do hero grande e alinhado à esquerda (não centralizado), sem imagem de fundo no hero, linhas finas (1px) separando seções em vez de cards com sombra",
+  },
+  {
+    name: "Vibrante e ousado",
+    fonts: "títulos em uma geométrica forte tipo Space Grotesk/Poppins bold, corpo em system-ui",
+    palette: ["#ff5a36", "#101010", "#fff4e8"],
+    layout:
+      "blocos de cor sólida ocupando a largura toda (full-bleed), formas geométricas simples (círculo, triângulo) como elementos decorativos, texto do hero em caixa alta ou peso bem forte",
+  },
+  {
+    name: "Corporativo premium",
+    fonts: "títulos em uma sans-serif robusta tipo Libre Franklin/IBM Plex Sans semibold, corpo em system-ui",
+    palette: ["#0d3b2e", "#f5f2ea", "#c8a24b"],
+    layout:
+      "hero dividido em duas colunas (texto de um lado, cartão/destaque do outro — não centralizado), seções com grid de 3 colunas pra diferenciais/números",
+  },
+  {
+    name: "Acolhedor artesanal",
+    fonts: 'títulos em uma serifada display tipo Fraunces/DM Serif Display, corpo em Nunito Sans/system-ui',
+    palette: ["#7a3b2e", "#fdf6ec", "#e8b04b"],
+    layout:
+      "cantos bem arredondados (16-24px), tom pessoal/caloroso no texto, hero centralizado mas com elemento gráfico orgânico (círculo/blob de fundo sutil via CSS)",
+  },
+  {
+    name: "Tech contemporâneo",
+    fonts: "títulos em Space Grotesk/Sora, corpo em system-ui",
+    palette: ["#0f172a", "#38bdf8", "#f1f5f9"],
+    layout:
+      "grid assimétrico no hero (não centralizado), cards com borda fina de 1px (sem sombra pesada nem gradiente roxo-azul), ícones de linha simples (não emoji)",
+  },
+  {
+    name: "Natural e orgânico",
+    fonts: 'títulos em serifada suave tipo Fraunces/Cormorant, corpo em Karla/system-ui',
+    palette: ["#3d5a3d", "#f7f3ea", "#d97b4f"],
+    layout:
+      "formas orgânicas (border-radius assimétrico tipo blob), bastante espaço negativo, paleta terrosa, nada de layout genérico centralizado",
+  },
 ];
 
 /** Escolhe um estilo visual de forma determinística a partir de um texto (mesmo negócio = mesmo estilo, negócios diferentes tendem a variar). */
-function pickVisualStyle(seed: string): string {
+function pickVisualStyle(seed: string): VisualStyle {
   const sum = seed.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
   return VISUAL_STYLES[sum % VISUAL_STYLES.length];
 }
@@ -45,8 +93,8 @@ export async function generateSiteContent(
   const visualStyle = pickVisualStyle(lead.id + lead.businessName);
 
   const brandInstructions = lead.brandColors?.length
-    ? `\nCores de marca reais desse negócio (extraídas das fotos do próprio anúncio) — use essas cores como base da paleta principal do site, não invente outra paleta: ${lead.brandColors.join(", ")}. IMPORTANTE sobre contraste/legibilidade: se alguma dessas cores for muito clara, muito saturada ou muito vibrante para servir de fundo de texto (ex: um amarelo ou verde-limão puro), NÃO a use como cor de fundo de blocos de texto — use-a com moderação em detalhes/destaques/botões/bordas, e mantenha o fundo das seções de texto em tons neutros (branco, cinza claro, ou uma versão bem escurecida/clareada da cor de marca) com o texto sempre em alto contraste sobre ele. O objetivo é o site parecer com a cor de marca, sem nenhum trecho de texto difícil de ler.`
-    : "";
+    ? `\nCores de marca reais desse negócio (extraídas das fotos do próprio anúncio) — use essas cores como base da paleta principal do site, não use a paleta de referência do estilo abaixo: ${lead.brandColors.join(", ")}. IMPORTANTE sobre contraste/legibilidade: se alguma dessas cores for muito clara, muito saturada ou muito vibrante para servir de fundo de texto (ex: um amarelo ou verde-limão puro), NÃO a use como cor de fundo de blocos de texto — use-a com moderação em detalhes/destaques/botões/bordas, e mantenha o fundo das seções de texto em tons neutros (branco, cinza claro, ou uma versão bem escurecida/clareada da cor de marca) com o texto sempre em alto contraste sobre ele. O objetivo é o site parecer com a cor de marca, sem nenhum trecho de texto difícil de ler.`
+    : `\nSem cor de marca real disponível — use exatamente esta paleta de referência do estilo escolhido (não invente outra): ${visualStyle.palette.join(", ")}.`;
 
   const logoInstructions = lead.logoUrl
     ? `\nEsse negócio tem uma logo real, disponível nesta URL: ${lead.logoUrl}. Inclua-a no cabeçalho como <img src="${lead.logoUrl}" alt="${lead.businessName}" style="height:40px">, ao lado ou no lugar do nome em texto.`
@@ -67,15 +115,22 @@ export async function generateSiteContent(
     messages: [
       {
         role: "user",
-        content: `Você é um designer/desenvolvedor web de alto nível, especializado em sites institucionais modernos. Crie um mockup de site institucional de uma única página (HTML autocontido — CSS inline em uma tag <style>, sem dependências externas, responsivo, mobile-first) para o negócio abaixo, além de 5 ideias de conteúdo para esse site. Esse site precisa ser único e específico pra esse negócio — não repita uma estrutura genérica de segmento.
+        content: `Você é um designer/desenvolvedor web de alto nível, especializado em sites institucionais modernos e VARIADOS — cada site que você entrega deve ser visualmente distinto dos outros, nunca convergindo pro mesmo "estilo seguro" de site gerado por IA. Crie um mockup de site institucional de uma única página (HTML autocontido — CSS inline em uma tag <style>, sem dependências externas, responsivo, mobile-first) para o negócio abaixo, além de 5 ideias de conteúdo para esse site. Esse site precisa ser único e específico pra esse negócio — não repita uma estrutura genérica de segmento.
 
 Negócio: ${lead.businessName}
 Segmento: ${lead.segment ?? "não informado"}
-Estilo visual a seguir: ${visualStyle}${brandInstructions}${logoInstructions}${descriptionInstructions}
 
-O resultado tem que parecer um site profissional feito em 2026, não um template datado. Isso significa: tipografia contemporânea (use uma pilha de fontes moderna via font-family, ex: system-ui, "Segoe UI", Inter, Helvetica Neue, sans-serif — nunca deixe cair no Times New Roman/Arial puro), bastante espaço em branco e hierarquia visual clara entre título/subtítulo/corpo, cabeçalho fixo/sticky com navegação simples, botões de call-to-action com estados de hover/transição sutis, cantos arredondados e sombras leves onde fizer sentido pro estilo escolhido, e nenhum elemento com cara de site antigo (sem bordas duras 3D, sem gradiente arco-íris, sem fonte cursiva genérica de "logo grátis").
+Estilo visual OBRIGATÓRIO pra esse site — siga à risca, não substitua por outra coisa:
+- Nome do estilo: ${visualStyle.name}
+- Tipografia: ${visualStyle.fonts}
+- Layout/composição: ${visualStyle.layout}
+${brandInstructions}${logoInstructions}${descriptionInstructions}
 
-O HTML deve ter: cabeçalho com o nome (e logo, se houver) do negócio, uma seção principal (hero) convincente e específica pro negócio, 3-4 seções relevantes (ex: serviços, sobre, diferenciais/depoimentos, contato) e rodapé. Se não houver cores de marca reais informadas acima, escolha uma paleta condizente com o segmento, sempre com contraste confortável entre texto e fundo (siga o padrão de acessibilidade WCAG AA como referência mínima). Não invente dados de contato reais — use placeholders claros como "[telefone]" e "[e-mail]".`,
+EVITE ATIVAMENTE os clichês mais comuns de site gerado por IA (isso é tão importante quanto seguir o estilo acima): gradiente roxo-para-azul no hero, tudo centralizado na página, cards com cantos arredondados genéricos e uma barrinha de destaque colorida na lateral, emoji como marcador de seção, fonte Inter/Space Grotesk quando o estilo pedir outra coisa. O objetivo é que, se alguém visse 5 sites gerados por você lado a lado, eles parecessem de designers diferentes — não a mesma template com cores trocadas.
+
+O resultado tem que parecer um site profissional feito em 2026, não um template datado: bastante espaço em branco e hierarquia visual clara entre título/subtítulo/corpo, cabeçalho fixo/sticky com navegação simples, botões de call-to-action com estados de hover/transição sutis, e nenhum elemento com cara de site antigo (sem bordas duras 3D, sem gradiente arco-íris, sem fonte cursiva genérica de "logo grátis").
+
+O HTML deve ter: cabeçalho com o nome (e logo, se houver) do negócio, uma seção principal (hero) convincente e específica pro negócio, 3-4 seções relevantes (ex: serviços, sobre, diferenciais/depoimentos, contato) e rodapé, sempre com contraste confortável entre texto e fundo (siga o padrão de acessibilidade WCAG AA como referência mínima). Não invente dados de contato reais — use placeholders claros como "[telefone]" e "[e-mail]".`,
       },
     ],
   });
