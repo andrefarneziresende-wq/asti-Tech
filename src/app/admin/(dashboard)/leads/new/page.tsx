@@ -23,6 +23,9 @@ export default function NewLeadPage() {
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState("");
   const [geoArea, setGeoArea] = useState<SelectedArea | null>(null);
+  const [siteFilter, setSiteFilter] = useState<"sem_site" | "com_site" | "qualquer">("sem_site");
+  const [requireEmail, setRequireEmail] = useState(false);
+  const [maxLeads, setMaxLeads] = useState(5);
 
   function validateUrlField(value: string): string {
     if (isBlank(value)) return "Informe a URL do anúncio.";
@@ -103,7 +106,13 @@ export default function NewLeadPage() {
     const res = await fetch("/api/admin/leads/scan-geo", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: geoQuery, area: geoArea ?? undefined }),
+      body: JSON.stringify({
+        query: geoQuery,
+        area: geoArea ?? undefined,
+        siteFilter,
+        requireEmail,
+        maxLeads,
+      }),
     });
 
     const body = await res.json().catch(() => null);
@@ -197,7 +206,7 @@ export default function NewLeadPage() {
       <div>
         <h2 className="text-lg font-bold text-foreground">Buscar por região (Google Places)</h2>
         <p className="mt-1 text-sm text-muted">
-          Cria um lead só para os comércios que ainda não têm site cadastrado — até 5 por vez.
+          Busca comércios reais e cria um lead pra cada um que corresponder aos filtros abaixo.
         </p>
 
         <form onSubmit={handleGeoSubmit} noValidate className="glow-card mt-6 space-y-4 rounded-2xl p-6">
@@ -225,6 +234,52 @@ export default function NewLeadPage() {
             <FieldError message={geoQueryError} />
           </div>
 
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="siteFilter" className="text-xs font-medium text-muted">Filtrar por site</label>
+              <select
+                id="siteFilter"
+                value={siteFilter}
+                onChange={(e) => setSiteFilter(e.target.value as typeof siteFilter)}
+                className="mt-1 w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
+              >
+                <option value="sem_site">Só quem não tem site</option>
+                <option value="com_site">Só quem já tem site (redesign)</option>
+                <option value="qualquer">Qualquer um</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="maxLeads" className="text-xs font-medium text-muted">Quantidade máxima de leads</label>
+              <input
+                id="maxLeads"
+                type="number"
+                min={1}
+                max={20}
+                value={maxLeads}
+                onChange={(e) => setMaxLeads(Math.min(20, Math.max(1, Number(e.target.value) || 1)))}
+                className="mt-1 w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
+              />
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={requireEmail}
+              onChange={(e) => setRequireEmail(e.target.checked)}
+              className="h-4 w-4 rounded border-border"
+            />
+            Só criar o lead se conseguirmos achar um e-mail de contato
+          </label>
+          {requireEmail && siteFilter === "sem_site" && (
+            <p className="text-xs text-amber-300">
+              O Google Places não devolve e-mail — só conseguimos achar um visitando o site do
+              comércio. Com &quot;só quem não tem site&quot;, praticamente nenhum vai ter e-mail
+              encontrado. Considere &quot;qualquer um&quot; ou &quot;só quem já tem site&quot;.
+            </p>
+          )}
+
           {geoError && <p className="text-sm text-red-400">{geoError}</p>}
 
           <button
@@ -232,7 +287,7 @@ export default function NewLeadPage() {
             disabled={geoLoading}
             className="w-full rounded-full border border-border px-7 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-primary disabled:opacity-60"
           >
-            {geoLoading ? "Iniciando..." : geoArea ? "Buscar na área desenhada (até 5 leads)" : "Buscar região (até 5 leads)"}
+            {geoLoading ? "Iniciando..." : `Buscar (até ${maxLeads} lead${maxLeads === 1 ? "" : "s"})`}
           </button>
         </form>
       </div>

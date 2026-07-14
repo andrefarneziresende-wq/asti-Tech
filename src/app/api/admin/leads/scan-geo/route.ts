@@ -5,8 +5,11 @@ import {
   scanGeographicArea,
   scanGeographicGrid,
   estimateMonthlyCost,
-  MAX_GEO_LEADS,
+  MAX_GEO_LEADS_CAP,
+  DEFAULT_GEO_LEADS,
   type ScanListingCallbacks,
+  type GeoScanOptions,
+  type SiteFilter,
 } from "@/lib/pipeline";
 import { buildSearchGrid, type GridCell } from "@/lib/geo-grid";
 import { withTimeout } from "@/lib/timeout";
@@ -20,7 +23,9 @@ const SCAN_TIMEOUT_MS = 260000;
 // Limite de células por varredura em grade, pra manter custo/tempo previsíveis.
 const MAX_GRID_CELLS = 30;
 
-async function runGeoScan(jobId: string, query: string, cells?: GridCell[]) {
+const VALID_SITE_FILTERS: SiteFilter[] = ["sem_site", "com_site", "qualquer"];
+
+async function runGeoScan(jobId: string, query: string, options: GeoScanOptions, cells?: GridCell[]) {
   await updateJob(jobId, { status: "processando" });
 
   const existing = await listLeads();
@@ -65,7 +70,9 @@ async function runGeoScan(jobId: string, query: string, cells?: GridCell[]) {
 
   try {
     const result = await withTimeout(
-      cells && cells.length > 0 ? scanGeographicGrid(query, cells, callbacks) : scanGeographicArea(query, callbacks),
+      cells && cells.length > 0
+        ? scanGeographicGrid(query, cells, options, callbacks)
+        : scanGeographicArea(query, options, callbacks),
       SCAN_TIMEOUT_MS,
       "Tempo esgotado durante a varredura (mais de 4min)."
     );
@@ -101,6 +108,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Informe a busca (ex: restaurantes em Pirituba, São Paulo)." }, { status: 400 });
   }
 
+  const siteFilter: SiteFilter = VALID_SITE_FILTERS.includes(body?.siteFilter) ? body.siteFilter : "sem_site";
+  const requireEmail = body?.requireEmail === true;
+  const maxLeads = Math.min(
+    Math.max(Math.trunc(Number(body?.maxLeads) || DEFAULT_GEO_LEADS), 1),
+    MAX_GEO_LEADS_CAP
+  );
+  const options: GeoScanOptions = { maxLeads, siteFilter, requireEmail };
+
   let cells: GridCell[] | undefined;
   if (area && typeof area.lat === "number" && typeof area.lng === "number" && typeof area.radiusMeters === "number") {
     cells = buildSearchGrid({ lat: area.lat, lng: area.lng }, area.radiusMeters, 600, MAX_GRID_CELLS);
@@ -112,7 +127,7 @@ export async function POST(req: NextRequest) {
     message: "Job criado, aguardando início.",
   });
 
-  after(() => runGeoScan(job.id, query, cells));
+  after(() => runGeoScan(job.id, query, options, cells));
 
-  return NextResponse.json({ jobId: job.id, maxLeads: MAX_GEO_LEADS, cells: cells?.length }, { status: 202 });
+  return NextResponse.json({ jobId: job.id, maxLeads, cells: cells?.length }, { status: 202 });
 }

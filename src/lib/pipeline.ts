@@ -146,18 +146,87 @@ export async function scanListingUrl(
   });
 }
 
-// Mesmo limite conservador da varredura por listagem: cada candidato pode
-// envolver uma chamada de visão da Claude (fotos do Places) — mantém o custo
-// e o tempo de execução previsíveis por varredura.
-export const MAX_GEO_LEADS = 5;
+// Teto de segurança pro número de leads por varredura — cada candidato pode
+// envolver uma ou mais chamadas à Claude (visão + eventualmente visitar o
+// site), mantendo custo e tempo de execução previsíveis.
+export const MAX_GEO_LEADS_CAP = 20;
+export const DEFAULT_GEO_LEADS = 5;
 
-/** Converte um resultado do Places num ScannedLead, identificando logo/cores a partir das fotos do local. */
-async function placeToScannedLead(place: PlaceResult): Promise<ScannedLead> {
-  const photoUrls = (
-    await Promise.all(place.photoNames.slice(0, 4).map((name) => resolvePlacePhotoUrl(name)))
-  ).filter((url): url is string => Boolean(url));
+export type SiteFilter = "sem_site" | "com_site" | "qualquer";
 
-  const brand = await analyzeBrandImages(photoUrls, place.displayName);
+export interface GeoScanOptions {
+  /** Quantos leads criar no máximo por varredura (1 a MAX_GEO_LEADS_CAP). */
+  maxLeads?: number;
+  /** Filtra comércios sem site (padrão, alvo do serviço principal), com site (leads de redesign), ou qualquer um. */
+  siteFilter?: SiteFilter;
+  /** Se true, só cria o lead quando conseguir achar um e-mail de contato (visitando o site, quando houver). */
+  requireEmail?: boolean;
+}
+
+function resolveGeoOptions(options: GeoScanOptions): Required<GeoScanOptions> {
+  return {
+    maxLeads: Math.min(Math.max(Math.trunc(options.maxLeads ?? DEFAULT_GEO_LEADS), 1), MAX_GEO_LEADS_CAP),
+    siteFilter: options.siteFilter ?? "sem_site",
+    requireEmail: options.requireEmail ?? false,
+  };
+}
+
+function passesSiteFilter(place: PlaceResult, siteFilter: SiteFilter): boolean {
+  if (siteFilter === "sem_site") return !place.websiteUri;
+  if (siteFilter === "com_site") return Boolean(place.websiteUri);
+  return true;
+}
+
+/** Visita o site já cadastrado do comércio pra tentar achar e-mail, descrição e identidade visual reais. */
+async function enrichFromWebsite(websiteUrl: string, businessName: string): Promise<Partial<ScannedLead>> {
+  try {
+    const html = await fetchPageHtml(websiteUrl);
+    const pageText = htmlToText(html).slice(0, 15000);
+    const info = await extractBusinessInfo(pageText, websiteUrl);
+    const imageUrls = extractImageUrls(html, websiteUrl);
+    const brand = await analyzeBrandImages(imageUrls, businessName);
+
+    return {
+      contactEmail: info.contactEmail || undefined,
+      businessDescription: info.description || undefined,
+      logoUrl: brand.logoUrl && imageUrls.includes(brand.logoUrl) ? brand.logoUrl : undefined,
+      brandColors: brand.colors.length ? brand.colors : undefined,
+    };
+  } catch {
+    // Site fora do ar, bloqueando o robô, etc. — segue sem esses dados extras.
+    return {};
+  }
+}
+
+/**
+ * Converte um resultado do Places num ScannedLead. Quando o comércio já tem
+ * site, visita esse site pra tentar achar e-mail/descrição/identidade visual
+ * reais; sem site (ou se o site não render nada útil), tenta identificar
+ * logo/cores a partir das fotos cadastradas no Google Places. Devolve `null`
+ * quando `requireEmail` está ativo e nenhum e-mail foi encontrado — sinal
+ * pro chamador pular esse candidato sem contar como erro.
+ */
+async function placeToScannedLead(
+  place: PlaceResult,
+  options: Required<GeoScanOptions>
+): Promise<ScannedLead | null> {
+  const enriched = place.websiteUri ? await enrichFromWebsite(place.websiteUri, place.displayName) : {};
+
+  if (options.requireEmail && !enriched.contactEmail) {
+    return null;
+  }
+
+  let logoUrl = enriched.logoUrl;
+  let brandColors = enriched.brandColors;
+
+  if (!logoUrl && !brandColors?.length) {
+    const photoUrls = (
+      await Promise.all(place.photoNames.slice(0, 4).map((name) => resolvePlacePhotoUrl(name)))
+    ).filter((url): url is string => Boolean(url));
+    const brand = await analyzeBrandImages(photoUrls, place.displayName);
+    logoUrl = brand.logoUrl && photoUrls.includes(brand.logoUrl) ? brand.logoUrl : undefined;
+    brandColors = brand.colors.length ? brand.colors : undefined;
+  }
 
   const descriptionParts = [
     place.formattedAddress,
@@ -165,34 +234,43 @@ async function placeToScannedLead(place: PlaceResult): Promise<ScannedLead> {
   ].filter(Boolean);
 
   return {
-    sourceUrl: `https://www.google.com/maps/place/?q=place_id:${place.id}`,
+    sourceUrl: place.websiteUri || `https://www.google.com/maps/place/?q=place_id:${place.id}`,
     businessName: place.displayName,
     segment: segmentFromTypes(place.types),
+    contactEmail: enriched.contactEmail,
     contactPhone: place.nationalPhoneNumber || undefined,
-    businessDescription: descriptionParts.length ? descriptionParts.join(" — ") : undefined,
-    logoUrl: brand.logoUrl && photoUrls.includes(brand.logoUrl) ? brand.logoUrl : undefined,
-    brandColors: brand.colors.length ? brand.colors : undefined,
+    businessDescription:
+      enriched.businessDescription || (descriptionParts.length ? descriptionParts.join(" — ") : undefined),
+    logoUrl,
+    brandColors,
   };
 }
 
-/** Processa candidatos do Places (já filtrados/selecionados) em sequência, chamando onLeadFound pra cada um. */
+/** Processa candidatos do Places em sequência até atingir maxLeads, chamando onLeadFound pra cada um aceito. */
 async function processPlaceCandidates(
-  selected: PlaceResult[],
+  candidates: PlaceResult[],
   totalFound: number,
+  options: Required<GeoScanOptions>,
   callbacks: ScanListingCallbacks
 ): Promise<{ candidatesFound: number; leadsCreated: number; errors: string[]; cancelled: boolean }> {
   let leadsCreated = 0;
   const errors: string[] = [];
 
-  for (const [index, place] of selected.entries()) {
+  for (const [index, place] of candidates.entries()) {
+    if (leadsCreated >= options.maxLeads) break;
+
     if (await callbacks.shouldStop?.()) {
       await callbacks.onProgress?.("Varredura cancelada pelo usuário.");
       return { candidatesFound: totalFound, leadsCreated, errors, cancelled: true };
     }
 
-    await callbacks.onProgress?.(`Processando ${index + 1}/${selected.length}: ${place.displayName}`);
+    await callbacks.onProgress?.(`Processando ${index + 1}/${candidates.length}: ${place.displayName}`);
     try {
-      const scanned = await placeToScannedLead(place);
+      const scanned = await placeToScannedLead(place, options);
+      if (!scanned) {
+        await callbacks.onProgress?.(`Pulado (sem e-mail encontrado): ${place.displayName}`);
+        continue;
+      }
       await callbacks.onLeadFound(scanned);
       leadsCreated += 1;
       await callbacks.onProgress?.(`Lead criado: ${scanned.businessName}`);
@@ -208,24 +286,31 @@ async function processPlaceCandidates(
 
 /**
  * Busca comércios de verdade numa região via Google Places (texto livre, ex:
- * "restaurantes em Pirituba, São Paulo"), filtra só os que NÃO têm site
- * cadastrado no Google (o alvo ideal da ASTI Tech), e tenta identificar a
- * logo/cores de marca a partir das fotos do próprio local no Google Places.
+ * "restaurantes em Pirituba, São Paulo"). Por padrão filtra só os que NÃO têm
+ * site cadastrado no Google (o alvo ideal da ASTI Tech), mas isso é
+ * configurável via `options` — inclusive pra achar leads de redesign (quem
+ * já tem site) e/ou exigir e-mail de contato encontrado.
  */
 export async function scanGeographicArea(
   query: string,
+  options: GeoScanOptions,
   callbacks: ScanListingCallbacks
 ): Promise<{ candidatesFound: number; leadsCreated: number; errors: string[]; cancelled: boolean }> {
+  const resolved = resolveGeoOptions(options);
   await callbacks.onProgress?.(`Buscando comércios no Google Places: "${query}"...`);
 
-  const withoutWebsite: PlaceResult[] = [];
+  // Quando precisa de e-mail, vários candidatos podem ser descartados por
+  // não ter um — busca mais páginas de antemão pra ter candidatos de sobra.
+  const targetPoolSize = resolved.requireEmail ? resolved.maxLeads * 4 : resolved.maxLeads;
+
+  const candidates: PlaceResult[] = [];
   let totalFound = 0;
   let pageToken: string | undefined;
 
-  for (let page = 0; page < 3 && withoutWebsite.length < MAX_GEO_LEADS; page += 1) {
+  for (let page = 0; page < 3 && candidates.length < targetPoolSize; page += 1) {
     const { places, nextPageToken } = await searchPlacesByText(query, pageToken);
     totalFound += places.length;
-    withoutWebsite.push(...places.filter((p) => !p.websiteUri));
+    candidates.push(...places.filter((p) => passesSiteFilter(p, resolved.siteFilter)));
     if (!nextPageToken) break;
     pageToken = nextPageToken;
     // A API do Places exige uma pequena espera antes do pageToken ficar válido.
@@ -237,14 +322,12 @@ export async function scanGeographicArea(
   }
 
   await callbacks.onCandidatesFound?.(totalFound);
-
-  const selected = withoutWebsite.slice(0, MAX_GEO_LEADS);
-  await callbacks.onLinksSelected?.(selected.length);
+  await callbacks.onLinksSelected?.(Math.min(candidates.length, resolved.maxLeads));
   await callbacks.onProgress?.(
-    `${totalFound} comércio(s) encontrado(s), ${withoutWebsite.length} sem site cadastrado. Processando ${selected.length}.`
+    `${totalFound} comércio(s) encontrado(s), ${candidates.length} correspondem ao filtro. Processando até ${resolved.maxLeads}.`
   );
 
-  return processPlaceCandidates(selected, totalFound, callbacks);
+  return processPlaceCandidates(candidates, totalFound, resolved, callbacks);
 }
 
 /**
@@ -256,8 +339,10 @@ export async function scanGeographicArea(
 export async function scanGeographicGrid(
   query: string,
   cells: { lat: number; lng: number; radiusMeters: number }[],
+  options: GeoScanOptions,
   callbacks: ScanListingCallbacks
 ): Promise<{ candidatesFound: number; leadsCreated: number; errors: string[]; cancelled: boolean }> {
+  const resolved = resolveGeoOptions(options);
   await callbacks.onProgress?.(`Buscando comércios no Google Places em ${cells.length} célula(s) da área...`);
 
   const seen = new Map<string, PlaceResult>();
@@ -274,7 +359,7 @@ export async function scanGeographicGrid(
       const { places } = await searchPlacesByText(query, undefined, cell);
       totalFound += places.length;
       for (const place of places) {
-        if (!place.websiteUri) seen.set(place.id, place);
+        if (passesSiteFilter(place, resolved.siteFilter)) seen.set(place.id, place);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -288,13 +373,13 @@ export async function scanGeographicGrid(
 
   await callbacks.onCandidatesFound?.(totalFound);
 
-  const selected = Array.from(seen.values()).slice(0, MAX_GEO_LEADS);
-  await callbacks.onLinksSelected?.(selected.length);
+  const candidates = Array.from(seen.values());
+  await callbacks.onLinksSelected?.(Math.min(candidates.length, resolved.maxLeads));
   await callbacks.onProgress?.(
-    `${totalFound} comércio(s) encontrado(s) na área, ${seen.size} sem site cadastrado. Processando ${selected.length}.`
+    `${totalFound} comércio(s) encontrado(s) na área, ${candidates.length} correspondem ao filtro. Processando até ${resolved.maxLeads}.`
   );
 
-  return processPlaceCandidates(selected, totalFound, callbacks);
+  return processPlaceCandidates(candidates, totalFound, resolved, callbacks);
 }
 
 const SEGMENT_MONTHLY_EXTRA: Record<string, number> = {
