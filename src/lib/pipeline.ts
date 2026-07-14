@@ -151,6 +151,61 @@ export async function scanListingUrl(
 // e o tempo de execução previsíveis por varredura.
 export const MAX_GEO_LEADS = 5;
 
+/** Converte um resultado do Places num ScannedLead, identificando logo/cores a partir das fotos do local. */
+async function placeToScannedLead(place: PlaceResult): Promise<ScannedLead> {
+  const photoUrls = (
+    await Promise.all(place.photoNames.slice(0, 4).map((name) => resolvePlacePhotoUrl(name)))
+  ).filter((url): url is string => Boolean(url));
+
+  const brand = await analyzeBrandImages(photoUrls, place.displayName);
+
+  const descriptionParts = [
+    place.formattedAddress,
+    place.rating ? `avaliação ${place.rating}/5 (${place.userRatingCount ?? 0} avaliações no Google)` : undefined,
+  ].filter(Boolean);
+
+  return {
+    sourceUrl: `https://www.google.com/maps/place/?q=place_id:${place.id}`,
+    businessName: place.displayName,
+    segment: segmentFromTypes(place.types),
+    contactPhone: place.nationalPhoneNumber || undefined,
+    businessDescription: descriptionParts.length ? descriptionParts.join(" — ") : undefined,
+    logoUrl: brand.logoUrl && photoUrls.includes(brand.logoUrl) ? brand.logoUrl : undefined,
+    brandColors: brand.colors.length ? brand.colors : undefined,
+  };
+}
+
+/** Processa candidatos do Places (já filtrados/selecionados) em sequência, chamando onLeadFound pra cada um. */
+async function processPlaceCandidates(
+  selected: PlaceResult[],
+  totalFound: number,
+  callbacks: ScanListingCallbacks
+): Promise<{ candidatesFound: number; leadsCreated: number; errors: string[]; cancelled: boolean }> {
+  let leadsCreated = 0;
+  const errors: string[] = [];
+
+  for (const [index, place] of selected.entries()) {
+    if (await callbacks.shouldStop?.()) {
+      await callbacks.onProgress?.("Varredura cancelada pelo usuário.");
+      return { candidatesFound: totalFound, leadsCreated, errors, cancelled: true };
+    }
+
+    await callbacks.onProgress?.(`Processando ${index + 1}/${selected.length}: ${place.displayName}`);
+    try {
+      const scanned = await placeToScannedLead(place);
+      await callbacks.onLeadFound(scanned);
+      leadsCreated += 1;
+      await callbacks.onProgress?.(`Lead criado: ${scanned.businessName}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      errors.push(`${place.displayName}: ${message}`);
+      await callbacks.onProgress?.(`Falha em ${place.displayName}: ${message}`);
+    }
+  }
+
+  return { candidatesFound: totalFound, leadsCreated, errors, cancelled: false };
+}
+
 /**
  * Busca comércios de verdade numa região via Google Places (texto livre, ex:
  * "restaurantes em Pirituba, São Paulo"), filtra só os que NÃO têm site
@@ -189,49 +244,57 @@ export async function scanGeographicArea(
     `${totalFound} comércio(s) encontrado(s), ${withoutWebsite.length} sem site cadastrado. Processando ${selected.length}.`
   );
 
-  let leadsCreated = 0;
-  const errors: string[] = [];
+  return processPlaceCandidates(selected, totalFound, callbacks);
+}
 
-  for (const [index, place] of selected.entries()) {
+/**
+ * Igual a scanGeographicArea, mas cobrindo uma área desenhada no mapa: em vez
+ * de uma única busca por texto, roda uma busca por célula da grade (cada uma
+ * com viés de localização pro seu pedaço da área), deduplicando os comércios
+ * encontrados entre células vizinhas por place ID antes de filtrar/processar.
+ */
+export async function scanGeographicGrid(
+  query: string,
+  cells: { lat: number; lng: number; radiusMeters: number }[],
+  callbacks: ScanListingCallbacks
+): Promise<{ candidatesFound: number; leadsCreated: number; errors: string[]; cancelled: boolean }> {
+  await callbacks.onProgress?.(`Buscando comércios no Google Places em ${cells.length} célula(s) da área...`);
+
+  const seen = new Map<string, PlaceResult>();
+  let totalFound = 0;
+
+  for (const [index, cell] of cells.entries()) {
     if (await callbacks.shouldStop?.()) {
       await callbacks.onProgress?.("Varredura cancelada pelo usuário.");
-      return { candidatesFound: totalFound, leadsCreated, errors, cancelled: true };
+      return { candidatesFound: totalFound, leadsCreated: 0, errors: [], cancelled: true };
     }
 
-    await callbacks.onProgress?.(`Processando ${index + 1}/${selected.length}: ${place.displayName}`);
+    await callbacks.onProgress?.(`Buscando célula ${index + 1}/${cells.length}...`);
     try {
-      const photoUrls = (
-        await Promise.all(place.photoNames.slice(0, 4).map((name) => resolvePlacePhotoUrl(name)))
-      ).filter((url): url is string => Boolean(url));
-
-      const brand = await analyzeBrandImages(photoUrls, place.displayName);
-
-      const descriptionParts = [
-        place.formattedAddress,
-        place.rating ? `avaliação ${place.rating}/5 (${place.userRatingCount ?? 0} avaliações no Google)` : undefined,
-      ].filter(Boolean);
-
-      const scanned: ScannedLead = {
-        sourceUrl: `https://www.google.com/maps/place/?q=place_id:${place.id}`,
-        businessName: place.displayName,
-        segment: segmentFromTypes(place.types),
-        contactPhone: place.nationalPhoneNumber || undefined,
-        businessDescription: descriptionParts.length ? descriptionParts.join(" — ") : undefined,
-        logoUrl: brand.logoUrl && photoUrls.includes(brand.logoUrl) ? brand.logoUrl : undefined,
-        brandColors: brand.colors.length ? brand.colors : undefined,
-      };
-
-      await callbacks.onLeadFound(scanned);
-      leadsCreated += 1;
-      await callbacks.onProgress?.(`Lead criado: ${scanned.businessName}`);
+      const { places } = await searchPlacesByText(query, undefined, cell);
+      totalFound += places.length;
+      for (const place of places) {
+        if (!place.websiteUri) seen.set(place.id, place);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      errors.push(`${place.displayName}: ${message}`);
-      await callbacks.onProgress?.(`Falha em ${place.displayName}: ${message}`);
+      await callbacks.onProgress?.(`Falha na célula ${index + 1}: ${message}`);
     }
   }
 
-  return { candidatesFound: totalFound, leadsCreated, errors, cancelled: false };
+  if (totalFound === 0) {
+    throw new Error("Nenhum comércio encontrado nessa área.");
+  }
+
+  await callbacks.onCandidatesFound?.(totalFound);
+
+  const selected = Array.from(seen.values()).slice(0, MAX_GEO_LEADS);
+  await callbacks.onLinksSelected?.(selected.length);
+  await callbacks.onProgress?.(
+    `${totalFound} comércio(s) encontrado(s) na área, ${seen.size} sem site cadastrado. Processando ${selected.length}.`
+  );
+
+  return processPlaceCandidates(selected, totalFound, callbacks);
 }
 
 const SEGMENT_MONTHLY_EXTRA: Record<string, number> = {

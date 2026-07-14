@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { isBlank, isValidUrl } from "@/lib/validation";
 import { FieldError } from "@/components/FieldError";
+import { AreaMapPicker, type SelectedArea } from "./AreaMapPicker";
 
 export default function NewLeadPage() {
   const router = useRouter();
@@ -21,6 +22,7 @@ export default function NewLeadPage() {
   const [geoQueryError, setGeoQueryError] = useState("");
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState("");
+  const [geoArea, setGeoArea] = useState<SelectedArea | null>(null);
 
   function validateUrlField(value: string): string {
     if (isBlank(value)) return "Informe a URL do anúncio.";
@@ -101,7 +103,7 @@ export default function NewLeadPage() {
     const res = await fetch("/api/admin/leads/scan-geo", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: geoQuery }),
+      body: JSON.stringify({ query: geoQuery, area: geoArea ?? undefined }),
     });
 
     const body = await res.json().catch(() => null);
@@ -195,8 +197,9 @@ export default function NewLeadPage() {
       <div>
         <h2 className="text-lg font-bold text-foreground">Buscar por região (Google Places)</h2>
         <p className="mt-1 text-sm text-muted">
-          Descreva o que buscar, ex: &quot;restaurantes em Pirituba, São Paulo&quot; ou &quot;salões de
-          beleza em Pirituba&quot;. Busca comércios reais no Google Maps e cria um lead só para os que
+          Descreva o que buscar, ex: &quot;restaurantes&quot; ou &quot;salões de beleza&quot;, e
+          desenhe a área no mapa abaixo (opcional — sem desenhar nada, usa só o texto, ex:
+          &quot;restaurantes em Pirituba, São Paulo&quot;). Cria um lead só para os comércios que
           ainda não têm site cadastrado — até 5 por vez.
         </p>
 
@@ -216,6 +219,13 @@ export default function NewLeadPage() {
             <FieldError message={geoQueryError} />
           </div>
 
+          <div>
+            <label className="text-xs font-medium text-muted">Área no mapa (opcional)</label>
+            <div className="mt-1">
+              <AreaMapPicker onAreaChange={setGeoArea} />
+            </div>
+          </div>
+
           {geoError && <p className="text-sm text-red-400">{geoError}</p>}
 
           <button
@@ -223,7 +233,7 @@ export default function NewLeadPage() {
             disabled={geoLoading}
             className="w-full rounded-full border border-border px-7 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-primary disabled:opacity-60"
           >
-            {geoLoading ? "Iniciando..." : "Buscar região (até 5 leads)"}
+            {geoLoading ? "Iniciando..." : geoArea ? "Buscar na área desenhada (até 5 leads)" : "Buscar região (até 5 leads)"}
           </button>
         </form>
       </div>

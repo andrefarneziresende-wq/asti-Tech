@@ -46,10 +46,14 @@ const FIELD_MASK = [
 /**
  * Busca lugares (comércios/negócios) por texto livre, ex: "restaurantes em
  * Pirituba, São Paulo". Usa a API nova do Google Places (Text Search).
+ * `locationBias` (opcional) restringe a busca a um círculo geográfico — usado
+ * quando o usuário desenha uma área no mapa, pra cobrir uma região através de
+ * várias buscas em grade (cada célula com seu próprio viés de localização).
  */
 export async function searchPlacesByText(
   query: string,
-  pageToken?: string
+  pageToken?: string,
+  locationBias?: { lat: number; lng: number; radiusMeters: number }
 ): Promise<{ places: PlaceResult[]; nextPageToken?: string }> {
   const res = await fetch(`${PLACES_API}/places:searchText`, {
     method: "POST",
@@ -63,6 +67,16 @@ export async function searchPlacesByText(
       languageCode: "pt-BR",
       regionCode: "BR",
       ...(pageToken ? { pageToken } : {}),
+      ...(locationBias
+        ? {
+            locationBias: {
+              circle: {
+                center: { latitude: locationBias.lat, longitude: locationBias.lng },
+                radius: locationBias.radiusMeters,
+              },
+            },
+          }
+        : {}),
     }),
   });
 
