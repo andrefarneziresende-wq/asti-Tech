@@ -10,6 +10,7 @@ import {
   extractImageUrls,
 } from "./fetch-page";
 import { withBrowser, renderPageHtml } from "./browser";
+import { searchPlacesByText, resolvePlacePhotoUrl, segmentFromTypes, type PlaceResult } from "./places";
 import { getAppSettings } from "./settings";
 import { DEFAULT_EMAIL_SUBJECT, DEFAULT_EMAIL_BODY_HTML, renderEmailTemplate } from "./email-template";
 
@@ -143,6 +144,94 @@ export async function scanListingUrl(
 
     return { candidatesFound: candidateLinks.length, leadsCreated, errors, cancelled: false };
   });
+}
+
+// Mesmo limite conservador da varredura por listagem: cada candidato pode
+// envolver uma chamada de visão da Claude (fotos do Places) — mantém o custo
+// e o tempo de execução previsíveis por varredura.
+export const MAX_GEO_LEADS = 5;
+
+/**
+ * Busca comércios de verdade numa região via Google Places (texto livre, ex:
+ * "restaurantes em Pirituba, São Paulo"), filtra só os que NÃO têm site
+ * cadastrado no Google (o alvo ideal da ASTI Tech), e tenta identificar a
+ * logo/cores de marca a partir das fotos do próprio local no Google Places.
+ */
+export async function scanGeographicArea(
+  query: string,
+  callbacks: ScanListingCallbacks
+): Promise<{ candidatesFound: number; leadsCreated: number; errors: string[]; cancelled: boolean }> {
+  await callbacks.onProgress?.(`Buscando comércios no Google Places: "${query}"...`);
+
+  const withoutWebsite: PlaceResult[] = [];
+  let totalFound = 0;
+  let pageToken: string | undefined;
+
+  for (let page = 0; page < 3 && withoutWebsite.length < MAX_GEO_LEADS; page += 1) {
+    const { places, nextPageToken } = await searchPlacesByText(query, pageToken);
+    totalFound += places.length;
+    withoutWebsite.push(...places.filter((p) => !p.websiteUri));
+    if (!nextPageToken) break;
+    pageToken = nextPageToken;
+    // A API do Places exige uma pequena espera antes do pageToken ficar válido.
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+
+  if (totalFound === 0) {
+    throw new Error("Nenhum comércio encontrado pra essa busca.");
+  }
+
+  await callbacks.onCandidatesFound?.(totalFound);
+
+  const selected = withoutWebsite.slice(0, MAX_GEO_LEADS);
+  await callbacks.onLinksSelected?.(selected.length);
+  await callbacks.onProgress?.(
+    `${totalFound} comércio(s) encontrado(s), ${withoutWebsite.length} sem site cadastrado. Processando ${selected.length}.`
+  );
+
+  let leadsCreated = 0;
+  const errors: string[] = [];
+
+  for (const [index, place] of selected.entries()) {
+    if (await callbacks.shouldStop?.()) {
+      await callbacks.onProgress?.("Varredura cancelada pelo usuário.");
+      return { candidatesFound: totalFound, leadsCreated, errors, cancelled: true };
+    }
+
+    await callbacks.onProgress?.(`Processando ${index + 1}/${selected.length}: ${place.displayName}`);
+    try {
+      const photoUrls = (
+        await Promise.all(place.photoNames.slice(0, 4).map((name) => resolvePlacePhotoUrl(name)))
+      ).filter((url): url is string => Boolean(url));
+
+      const brand = await analyzeBrandImages(photoUrls, place.displayName);
+
+      const descriptionParts = [
+        place.formattedAddress,
+        place.rating ? `avaliação ${place.rating}/5 (${place.userRatingCount ?? 0} avaliações no Google)` : undefined,
+      ].filter(Boolean);
+
+      const scanned: ScannedLead = {
+        sourceUrl: `https://www.google.com/maps/place/?q=place_id:${place.id}`,
+        businessName: place.displayName,
+        segment: segmentFromTypes(place.types),
+        contactPhone: place.nationalPhoneNumber || undefined,
+        businessDescription: descriptionParts.length ? descriptionParts.join(" — ") : undefined,
+        logoUrl: brand.logoUrl && photoUrls.includes(brand.logoUrl) ? brand.logoUrl : undefined,
+        brandColors: brand.colors.length ? brand.colors : undefined,
+      };
+
+      await callbacks.onLeadFound(scanned);
+      leadsCreated += 1;
+      await callbacks.onProgress?.(`Lead criado: ${scanned.businessName}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      errors.push(`${place.displayName}: ${message}`);
+      await callbacks.onProgress?.(`Falha em ${place.displayName}: ${message}`);
+    }
+  }
+
+  return { candidatesFound: totalFound, leadsCreated, errors, cancelled: false };
 }
 
 const SEGMENT_MONTHLY_EXTRA: Record<string, number> = {

@@ -8,7 +8,6 @@ export const DEFAULT_EMAIL_BODY_HTML = `<div style="font-family: sans-serif; col
   <p><a href="{{mockupUrl}}">{{mockupUrl}}</a></p>
   <p>Algumas ideias para o seu site:</p>
   {{ideasList}}
-  <p>Custo mensal estimado (hospedagem + manutenção): <strong>R$ {{estimatedMonthlyCost}}</strong></p>
   <p>Gostou do que viu? É só responder este e-mail dizendo que tem interesse que damos continuidade ao projeto com você.</p>
   <p>— Equipe ASTI Tech</p>
 </div>`;

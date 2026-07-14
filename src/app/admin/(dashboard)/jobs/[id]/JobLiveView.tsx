@@ -65,7 +65,9 @@ export function JobLiveView({ initialJob }: { initialJob: ScanJob }) {
     <div>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Varredura de listagem</h1>
+          <h1 className="text-2xl font-bold text-foreground">
+            {job.type === "geo" ? "Varredura geográfica" : "Varredura de listagem"}
+          </h1>
           <p className="mt-1 max-w-xl break-all text-sm text-muted">{job.sourceUrl}</p>
           <span
             className={`mt-2 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${

@@ -17,6 +17,11 @@ export default function NewLeadPage() {
   const [listingLoading, setListingLoading] = useState(false);
   const [listingError, setListingError] = useState("");
 
+  const [geoQuery, setGeoQuery] = useState("");
+  const [geoQueryError, setGeoQueryError] = useState("");
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [geoError, setGeoError] = useState("");
+
   function validateUrlField(value: string): string {
     if (isBlank(value)) return "Informe a URL do anúncio.";
     if (!isValidUrl(value)) return "Informe uma URL válida (começando com http:// ou https://).";
@@ -76,6 +81,34 @@ export default function NewLeadPage() {
     if (!res.ok) {
       setListingLoading(false);
       setListingError(body?.error ?? "Não foi possível escanear essa lista.");
+      return;
+    }
+
+    router.push(`/admin/jobs/${body.jobId}`);
+  }
+
+  async function handleGeoSubmit(event: FormEvent) {
+    event.preventDefault();
+
+    if (isBlank(geoQuery)) {
+      setGeoQueryError("Informe o que buscar (ex: restaurantes em Pirituba, São Paulo).");
+      return;
+    }
+    setGeoQueryError("");
+    setGeoLoading(true);
+    setGeoError("");
+
+    const res = await fetch("/api/admin/leads/scan-geo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: geoQuery }),
+    });
+
+    const body = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      setGeoLoading(false);
+      setGeoError(body?.error ?? "Não foi possível iniciar essa busca.");
       return;
     }
 
@@ -155,6 +188,42 @@ export default function NewLeadPage() {
             className="w-full rounded-full border border-border px-7 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-primary disabled:opacity-60"
           >
             {listingLoading ? "Iniciando..." : "Escanear lista (até 5 leads)"}
+          </button>
+        </form>
+      </div>
+
+      <div>
+        <h2 className="text-lg font-bold text-foreground">Buscar por região (Google Places)</h2>
+        <p className="mt-1 text-sm text-muted">
+          Descreva o que buscar, ex: &quot;restaurantes em Pirituba, São Paulo&quot; ou &quot;salões de
+          beleza em Pirituba&quot;. Busca comércios reais no Google Maps e cria um lead só para os que
+          ainda não têm site cadastrado — até 5 por vez.
+        </p>
+
+        <form onSubmit={handleGeoSubmit} noValidate className="glow-card mt-6 space-y-4 rounded-2xl p-6">
+          <div>
+            <label htmlFor="geoQuery" className="text-xs font-medium text-muted">O que buscar</label>
+            <input
+              id="geoQuery"
+              value={geoQuery}
+              onChange={(e) => {
+                setGeoQuery(e.target.value);
+                setGeoQueryError("");
+              }}
+              placeholder="Ex: restaurantes em Pirituba, São Paulo"
+              className="mt-1 w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
+            />
+            <FieldError message={geoQueryError} />
+          </div>
+
+          {geoError && <p className="text-sm text-red-400">{geoError}</p>}
+
+          <button
+            type="submit"
+            disabled={geoLoading}
+            className="w-full rounded-full border border-border px-7 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-primary disabled:opacity-60"
+          >
+            {geoLoading ? "Iniciando..." : "Buscar região (até 5 leads)"}
           </button>
         </form>
       </div>
