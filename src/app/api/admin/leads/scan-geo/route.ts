@@ -14,11 +14,11 @@ import {
 import { buildSearchGrid, type GridCell } from "@/lib/geo-grid";
 import { withTimeout } from "@/lib/timeout";
 
-// Cada candidato pode envolver uma chamada de visão da Claude (fotos do
-// Google Places), além das próprias chamadas de busca — plano Pro permite
-// margem generosa acima dos 60s do Hobby.
-export const maxDuration = 280;
-const SCAN_TIMEOUT_MS = 260000;
+// Cada candidato pode envolver uma ou mais chamadas à Claude (visão +
+// eventualmente visitar o site), além das buscas em grade — com Fluid
+// Compute no plano Pro, o teto sobe pra 800s; usamos 600s (10min) de folga.
+export const maxDuration = 600;
+const SCAN_TIMEOUT_MS = 580000;
 
 // Limite de células por varredura em grade, pra manter custo/tempo previsíveis.
 const MAX_GRID_CELLS = 30;
@@ -74,7 +74,7 @@ async function runGeoScan(jobId: string, query: string, options: GeoScanOptions,
         ? scanGeographicGrid(query, cells, options, callbacks)
         : scanGeographicArea(query, options, callbacks),
       SCAN_TIMEOUT_MS,
-      "Tempo esgotado durante a varredura (mais de 4min)."
+      "Tempo esgotado durante a varredura (mais de 9min e meio)."
     );
 
     if (result.cancelled) {

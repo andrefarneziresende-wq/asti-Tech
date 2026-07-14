@@ -6,14 +6,14 @@ import { assertPublicHttpUrl } from "@/lib/fetch-page";
 import { withTimeout } from "@/lib/timeout";
 
 // Processa até MAX_LISTING_LEADS anúncios em sequência (cada um com sua
-// própria chamada à Claude); no plano Pro da Vercel dá pra usar um limite
-// bem mais alto que os 60s do Hobby.
-export const maxDuration = 280;
+// própria chamada à Claude); com Fluid Compute no plano Pro, o teto sobe
+// pra 800s — usamos 600s (10min) de folga pra varreduras mais completas.
+export const maxDuration = 600;
 
 // Deixa uma margem antes do limite da função, pra garantir que o erro seja
 // gravado no job antes da plataforma matar a execução sem aviso — importante
 // quando o site de destino está fora do ar ou muito lento.
-const SCAN_TIMEOUT_MS = 260000;
+const SCAN_TIMEOUT_MS = 580000;
 
 async function runListingScan(jobId: string, listingUrl: string) {
   await updateJob(jobId, { status: "processando" });
@@ -60,7 +60,7 @@ async function runListingScan(jobId: string, listingUrl: string) {
         },
       }),
       SCAN_TIMEOUT_MS,
-      "Tempo esgotado durante a varredura (mais de 4min). O site de destino pode estar fora do ar ou muito lento."
+      "Tempo esgotado durante a varredura (mais de 9min e meio). O site de destino pode estar fora do ar ou muito lento."
     );
 
     if (result.cancelled) {
