@@ -8,7 +8,7 @@ export function Footer() {
         <div>
           <Logo className="h-9 w-auto" />
           <p className="mt-4 max-w-xs text-sm text-muted">
-            Sites profissionais para pequenas e médias empresas, criados com Inteligência Artificial.
+            Sites profissionais para pequenas e médias empresas, criados com tecnologia própria e agilidade.
           </p>
         </div>
 

@@ -2,7 +2,7 @@ const SERVICES = [
   {
     title: "Sites institucionais",
     description:
-      "Apresente sua empresa com um site rápido, responsivo e otimizado, projetado por IA a partir do seu negócio real.",
+      "Apresente sua empresa com um site rápido, responsivo e otimizado, projetado sob medida a partir do seu negócio real.",
     icon: "🏢",
   },
   {
@@ -18,9 +18,9 @@ const SERVICES = [
     icon: "🛒",
   },
   {
-    title: "Redesign com IA",
+    title: "Redesign de site",
     description:
-      "Site antigo, parado no tempo? Nossa IA analisa e recria com visual moderno e melhor performance.",
+      "Site antigo, parado no tempo? A gente analisa e recria com visual moderno e melhor performance.",
     icon: "♻️",
   },
   {
@@ -43,7 +43,7 @@ export function Services() {
       <div className="mx-auto max-w-2xl text-center">
         <h2 className="text-3xl font-bold md:text-4xl">O que a gente cria para o seu negócio</h2>
         <p className="mt-4 text-muted">
-          Combinamos Inteligência Artificial com curadoria humana para entregar sites que
+          Combinamos tecnologia própria com curadoria humana para entregar sites que
           realmente representam pequenas e médias empresas.
         </p>
       </div>

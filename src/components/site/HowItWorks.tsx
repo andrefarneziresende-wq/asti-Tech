@@ -7,9 +7,9 @@ const STEPS = [
   },
   {
     step: "02",
-    title: "Geração do site com IA",
+    title: "Geração do site",
     description:
-      "A partir dos dados que você passou, a IA projeta e desenvolve um mockup completo do site do seu negócio.",
+      "A partir dos dados que você passou, projetamos e desenvolvemos um mockup completo do site do seu negócio.",
   },
   {
     step: "03",

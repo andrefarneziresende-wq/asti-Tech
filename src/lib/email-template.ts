@@ -4,7 +4,7 @@ export const DEFAULT_EMAIL_SUBJECT = "{{businessName}}, preparamos um site para 
 
 export const DEFAULT_EMAIL_BODY_HTML = `<div style="font-family: sans-serif; color: #111;">
   <p>Olá, {{businessName}}!</p>
-  <p>Preparamos um mockup gratuito do site do seu negócio, feito com Inteligência Artificial:</p>
+  <p>Preparamos um mockup gratuito do site do seu negócio:</p>
   <p><a href="{{mockupUrl}}">{{mockupUrl}}</a></p>
   <p>Algumas ideias para o seu site:</p>
   {{ideasList}}
