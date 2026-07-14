@@ -197,15 +197,21 @@ export default function NewLeadPage() {
       <div>
         <h2 className="text-lg font-bold text-foreground">Buscar por região (Google Places)</h2>
         <p className="mt-1 text-sm text-muted">
-          Descreva o que buscar, ex: &quot;restaurantes&quot; ou &quot;salões de beleza&quot;, e
-          desenhe a área no mapa abaixo (opcional — sem desenhar nada, usa só o texto, ex:
-          &quot;restaurantes em Pirituba, São Paulo&quot;). Cria um lead só para os comércios que
-          ainda não têm site cadastrado — até 5 por vez.
+          Cria um lead só para os comércios que ainda não têm site cadastrado — até 5 por vez.
         </p>
 
         <form onSubmit={handleGeoSubmit} noValidate className="glow-card mt-6 space-y-4 rounded-2xl p-6">
           <div>
-            <label htmlFor="geoQuery" className="text-xs font-medium text-muted">O que buscar</label>
+            <label className="text-xs font-medium text-muted">Onde buscar (opcional)</label>
+            <div className="mt-1">
+              <AreaMapPicker onAreaChange={setGeoArea} />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="geoQuery" className="text-xs font-medium text-muted">
+              {geoArea ? "Tipo de negócio (a localização já vem do mapa)" : "O que e onde buscar"}
+            </label>
             <input
               id="geoQuery"
               value={geoQuery}
@@ -213,17 +219,10 @@ export default function NewLeadPage() {
                 setGeoQuery(e.target.value);
                 setGeoQueryError("");
               }}
-              placeholder="Ex: restaurantes em Pirituba, São Paulo"
+              placeholder={geoArea ? "Ex: restaurantes" : "Ex: restaurantes em Pirituba, São Paulo"}
               className="mt-1 w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
             />
             <FieldError message={geoQueryError} />
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-muted">Área no mapa (opcional)</label>
-            <div className="mt-1">
-              <AreaMapPicker onAreaChange={setGeoArea} />
-            </div>
           </div>
 
           {geoError && <p className="text-sm text-red-400">{geoError}</p>}
